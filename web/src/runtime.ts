@@ -861,6 +861,13 @@ export class Instance implements Disposable {
   private deviceLostIsError = true;  // whether device.lost is due to actual error or dispose()
 
   /**
+   * Controls how often device.sync() is called when loading tensor shards to GPU.
+   * A value of 1 means sync every iteration (default). A value of N means sync
+   * every N iterations and on the last iteration of each shard.
+   */
+  deviceSyncFrequency = 1;
+
+  /**
    * Internal function(registered by the runtime)
    */
   private wasmCreateLibraryModule?: PackedFunc &
@@ -1408,7 +1415,9 @@ export class Instance implements Disposable {
               )
             });
             gpu_arr.copyFrom(cpu_arr);
-            await device.sync();
+            if (j % this.deviceSyncFrequency === this.deviceSyncFrequency - 1 || j === shardRecords.length - 1) {
+              await device.sync();
+            }
             this.tensorCacheUpdate(rec.name, gpu_arr, false);
             cpu_arr.dispose();
             gpu_arr.dispose();
@@ -1893,6 +1902,16 @@ export class Instance implements Disposable {
       });
     }
     this.lib.webGPUContext = webGPUContext;
+  }
+
+  /**
+   * Set unsafe buffer creation mode for WebGPU context.
+   * @param unsafe When true, uses faster buffer creation without async error scopes.
+   */
+  setUnsafeBufferCreation(unsafe: boolean): void {
+    if (this.lib.webGPUContext) {
+      this.lib.webGPUContext.unsafeBufferCreation = unsafe;
+    }
   }
 
   /** Register all object factory */

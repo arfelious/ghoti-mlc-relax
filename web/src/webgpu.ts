@@ -160,7 +160,25 @@ export async function detectGPUDevice(powerPreference: "low-power" | "high-perfo
  * Note: We treat any error occurred at `createBuffer()` fatal and expect the user to handle
  *   `device.destroy()` with `device.lost.then()`.
  */
-function tryCreateBuffer(device: GPUDevice, descriptor: GPUBufferDescriptor) {
+/**
+ * Create a GPU buffer with error handling.
+ * @param device The GPU device
+ * @param descriptor Buffer descriptor
+ * @param unsafe If true, skip async error scopes (faster but errors handled synchronously)
+ * @returns The created buffer
+ */
+function tryCreateBuffer(device: GPUDevice, descriptor: GPUBufferDescriptor, unsafe = false) {
+  if (unsafe) {
+    // Unsafe mode: synchronous error handling only, no device destruction
+    try {
+      return device.createBuffer(descriptor);
+    } catch (e) {
+      console.error("Buffer creation failed synchronously:", e);
+      throw e;
+    }
+  }
+
+  // Safe mode: full async error scope handling with device destruction on error
   device.pushErrorScope("out-of-memory");
   device.pushErrorScope("validation");
   device.pushErrorScope("internal");
@@ -399,6 +417,11 @@ export interface FunctionInfo {
 export class WebGPUContext {
   device: GPUDevice;
   memory: Memory;
+  /**
+   * When true, uses faster buffer creation without async error scopes.
+   * Default false (safe mode with full error handling).
+   */
+  unsafeBufferCreation = false;
   // internal data
   private bufferTable: Array<GPUBuffer | undefined> = [undefined];
   private bufferTableFreeId: Array<number> = [];
@@ -561,7 +584,7 @@ export class WebGPUContext {
       buffer = tryCreateBuffer(this.device, {
         size: allocSize,
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-      });
+      }, this.unsafeBufferCreation);
     }
     assert(nbytes <= buffer.size);
     return buffer;
@@ -836,7 +859,7 @@ export class WebGPUContext {
     const buffer = tryCreateBuffer(this.device, {
       size: nbytes,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
-    });
+    }, this.unsafeBufferCreation);
     this.currAllocatedBytes += nbytes;
     this.allAllocatedBytes += nbytes;
     if (this.currAllocatedBytes > this.peakAllocatedBytes) {
@@ -890,7 +913,7 @@ export class WebGPUContext {
     const gpuTemp = tryCreateBuffer(this.device, {
       size: nbytes,
       usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
-    });
+    }, this.unsafeBufferCreation);
 
     const copyEncoder = this.device.createCommandEncoder();
     copyEncoder.copyBufferToBuffer(
