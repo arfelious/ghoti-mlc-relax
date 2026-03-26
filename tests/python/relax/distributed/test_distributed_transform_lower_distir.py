@@ -23,7 +23,7 @@ from tvm import relax
 from tvm.ir import assert_structural_equal
 from tvm.script.parser import ir as I
 from tvm.script.parser import relax as R
-from tvm.script.parser import tir as T
+from tvm.script.parser import tirx as T
 
 
 def test_mlp():
@@ -39,12 +39,12 @@ def test_mlp():
             A: T.Buffer((T.int64(128), T.int64(64)), "float32"),
             T_multiply: T.Buffer((T.int64(128), T.int64(64)), "float32"),
         ):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             # with T.sblock("root"):
-            T_multiply_1 = T.alloc_buffer((T.int64(128), T.int64(64)))
-            compute = T.alloc_buffer((T.int64(128), T.int64(64)))
-            T_multiply_2 = T.alloc_buffer((T.int64(128), T.int64(64)))
-            T_add = T.alloc_buffer((T.int64(128), T.int64(64)))
+            T_multiply_1 = T.sblock_alloc_buffer((T.int64(128), T.int64(64)))
+            compute = T.sblock_alloc_buffer((T.int64(128), T.int64(64)))
+            T_multiply_2 = T.sblock_alloc_buffer((T.int64(128), T.int64(64)))
+            T_add = T.sblock_alloc_buffer((T.int64(128), T.int64(64)))
             for ax0, ax1 in T.grid(T.int64(128), T.int64(64)):
                 with T.sblock("T_multiply"):
                     v_ax0, v_ax1 = T.axis.remap("SS", [ax0, ax1])
@@ -82,7 +82,7 @@ def test_mlp():
             B: T.Buffer((T.int64(128), T.int64(64)), "float32"),
             matmul_1: T.Buffer((T.int64(128), T.int64(64)), "float32"),
         ):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             # with T.sblock("root"):
             for i0, i1, k in T.grid(T.int64(128), T.int64(64), T.int64(128)):
                 with T.sblock("matmul"):
@@ -99,7 +99,7 @@ def test_mlp():
             B: T.Buffer((T.int64(64), T.int64(128)), "float32"),
             matmul_1: T.Buffer((T.int64(128), T.int64(128)), "float32"),
         ):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             # with T.sblock("root"):
             for i0, i1, k in T.grid(T.int64(128), T.int64(128), T.int64(64)):
                 with T.sblock("matmul"):
@@ -198,12 +198,12 @@ def test_mlp_with_tuple():
             A: T.Buffer((T.int64(128), T.int64(64)), "float32"),
             T_multiply: T.Buffer((T.int64(128), T.int64(64)), "float32"),
         ):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             # with T.sblock("root"):
-            T_multiply_1 = T.alloc_buffer((T.int64(128), T.int64(64)))
-            compute = T.alloc_buffer((T.int64(128), T.int64(64)))
-            T_multiply_2 = T.alloc_buffer((T.int64(128), T.int64(64)))
-            T_add = T.alloc_buffer((T.int64(128), T.int64(64)))
+            T_multiply_1 = T.sblock_alloc_buffer((T.int64(128), T.int64(64)))
+            compute = T.sblock_alloc_buffer((T.int64(128), T.int64(64)))
+            T_multiply_2 = T.sblock_alloc_buffer((T.int64(128), T.int64(64)))
+            T_add = T.sblock_alloc_buffer((T.int64(128), T.int64(64)))
             for ax0, ax1 in T.grid(T.int64(128), T.int64(64)):
                 with T.sblock("T_multiply"):
                     v_ax0, v_ax1 = T.axis.remap("SS", [ax0, ax1])
@@ -241,7 +241,7 @@ def test_mlp_with_tuple():
             B: T.Buffer((T.int64(64), T.int64(128)), "float32"),
             matmul: T.Buffer((T.int64(64), T.int64(128)), "float32"),
         ):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             # with T.sblock("root"):
             for i0, i1, k in T.grid(T.int64(64), T.int64(128), T.int64(64)):
                 with T.sblock("matmul"):
@@ -258,7 +258,7 @@ def test_mlp_with_tuple():
             B: T.Buffer((T.int64(128), T.int64(64)), "float32"),
             matmul: T.Buffer((T.int64(128), T.int64(64)), "float32"),
         ):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             # with T.sblock("root"):
             for i0, i1, k in T.grid(T.int64(128), T.int64(64), T.int64(128)):
                 with T.sblock("matmul"):
@@ -275,7 +275,7 @@ def test_mlp_with_tuple():
             T_split: T.Buffer((64, 64), "float32"),
             T_split_1: T.Buffer((64, 64), "float32"),
         ):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             # with T.sblock("root"):
             for ax1, ax2 in T.grid(64, 64):
                 with T.sblock("T_split"):

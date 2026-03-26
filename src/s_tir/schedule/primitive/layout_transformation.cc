@@ -29,7 +29,7 @@
 
 namespace tvm {
 namespace s_tir {
-using namespace tvm::tir;
+using namespace tvm::tirx;
 
 /*! \brief Planning stage prior to rewriting in TransformLayoutRewriter
  *
@@ -57,12 +57,12 @@ using namespace tvm::tir;
  * of those write stages writes to all pre-transformation indices
  * following a row-major traversal.  These write stage is rewritten to
  * be row-major traversals of the post-transformation indices, with a
- * `tir::if_then_else` call to write either the specified `pad_value`
+ * `tirx::if_then_else` call to write either the specified `pad_value`
  * into padding or the computed value into non-padding.
  *
  * 4. EpiloguePlan.  The transformation introduces padding, has at
  * least one write stage for the transformed buffer, but no write
- * stage can be rewritten to use `tir::if_then_else`.  The
+ * stage can be rewritten to use `tirx::if_then_else`.  The
  * transformation still requires the `pad_value` to be written into
  * the padding, so a new block is inserted after the last write stage
  * to explicitly fill the padding.
@@ -117,7 +117,7 @@ class TransformLayoutPlanner : private StmtExprVisitor {
     // contribute, but the first and last must.
     std::vector<For> dependent_loopnest;
 
-    // Whether the padding could be represented as a tir::if_then_else
+    // Whether the padding could be represented as a tirx::if_then_else
     // node.  This requires that the surrounding loop iterators
     // iterate over all pre-transformation buffer axes, that there are
     // no data dependencies between loop iterations, and that
@@ -131,7 +131,7 @@ class TransformLayoutPlanner : private StmtExprVisitor {
     StmtExprVisitor::VisitStmt_(op);
   }
 
-  void VisitStmt_(const LetStmtNode* op) override {
+  void VisitStmt_(const BindNode* op) override {
     BindVariableDefinition context(this, op->var, op->value);
     StmtExprVisitor::VisitStmt_(op);
   }
@@ -625,37 +625,23 @@ class TransformLayoutPlanner : private StmtExprVisitor {
     Var var_;
   };
 
+  // Under SSA, each variable is bound exactly once, so the lookup maps
+  // grow monotonically and cleanup is unnecessary.  Omitting cleanup also
+  // ensures correctness for flat BindNode (which has no body): the
+  // binding must remain visible to subsequent sibling statements.
   struct BindVariableDefinition {
     BindVariableDefinition() {}
-    BindVariableDefinition(TransformLayoutPlanner* self, Var var, PrimExpr value)
-        : self_(self), var_(var) {
+    BindVariableDefinition(TransformLayoutPlanner* self, Var var, PrimExpr value) {
       if (auto loop_depth = self->LoopDependencyRange(value); loop_depth.has_value()) {
-        self_->loop_depth_lookup_[var_.get()] = loop_depth.value();
-        self_->active_var_bindings_[var_.get()] = Substitute(value, self_->active_var_bindings_);
+        self->loop_depth_lookup_[var.get()] = loop_depth.value();
+        self->active_var_bindings_[var.get()] = Substitute(value, self->active_var_bindings_);
       }
     }
-    ~BindVariableDefinition() {
-      if (self_) {
-        self_->loop_depth_lookup_.erase(var_.get());
-        self_->active_var_bindings_.erase(var_.get());
-      }
-    }
+    ~BindVariableDefinition() {}
     BindVariableDefinition(const BindVariableDefinition&) = delete;
     BindVariableDefinition& operator=(const BindVariableDefinition&) = delete;
-    BindVariableDefinition(BindVariableDefinition&& other) : BindVariableDefinition() {
-      swap(other);
-    }
-    BindVariableDefinition& operator=(BindVariableDefinition&& other) {
-      swap(other);
-      return *this;
-    }
-    void swap(BindVariableDefinition& other) {
-      std::swap(self_, other.self_);
-      std::swap(var_, other.var_);
-    }
-
-    TransformLayoutPlanner* self_{nullptr};
-    Var var_;
+    BindVariableDefinition(BindVariableDefinition&&) = default;
+    BindVariableDefinition& operator=(BindVariableDefinition&&) = default;
   };
 
   struct BindBlockRealize {
@@ -719,7 +705,7 @@ class TransformLayoutPlanner : private StmtExprVisitor {
  * \brief Collect blocks that are part of root block to be passed to ScheduleState::Replace for SRef
  * reuse
  */
-class ReuseBlocksCollector : public tir::StmtVisitor {
+class ReuseBlocksCollector : public tirx::StmtVisitor {
  public:
   static ffi::Map<SBlock, SBlock> Collect(SBlock result,
                                           ffi::Map<SBlock, SBlock> new_block_to_old) {
@@ -737,7 +723,7 @@ class ReuseBlocksCollector : public tir::StmtVisitor {
       : new_block_to_old_(new_block_to_old) {}
 
   /*! \brief Override the Stmt visiting behaviour */
-  void VisitStmt_(const tir::SBlockNode* block) override {
+  void VisitStmt_(const tirx::SBlockNode* block) override {
     SBlock block_ref = ffi::GetRef<SBlock>(block);
     auto it = new_block_to_old_.find(block_ref);
     if (it != new_block_to_old_.end()) {
@@ -1150,7 +1136,7 @@ IndexMap LegalizeIndexMapDType(const IndexMap& index_map, const ffi::Array<PrimE
     auto final_indices = index_map->final_indices.Map([&](PrimExpr index) {
       if (auto* ptr = index.as<IntImmNode>()) {
         TVM_FFI_ICHECK(index_dtype.has_value());
-        return tir::make_const(*index_dtype, ptr->value);
+        return tirx::make_const(*index_dtype, ptr->value);
       } else {
         return SubstituteWithDataTypeLegalization(index,
                                                   [&](const Var& var) { return var_map.Get(var); });

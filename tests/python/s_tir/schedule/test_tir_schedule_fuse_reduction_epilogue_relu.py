@@ -21,12 +21,12 @@ import pytest
 
 import tvm
 import tvm.testing
-from tvm import tir
+from tvm import tirx
 from tvm.s_tir.schedule.testing import (
     assert_structural_equal_ignore_global_symbol,
     verify_trace_roundtrip,
 )
-from tvm.script import tir as T
+from tvm.script import tirx as T
 
 # pylint: disable=no-member,invalid-name,unused-variable
 
@@ -39,7 +39,7 @@ def matmul_bias_relu_before(
     D: T.Buffer((16, 16), "float32"),
 ) -> None:
     """Original function with separate reduction and epilogue blocks (Bias + ReLU)."""
-    temp = T.alloc_buffer((16, 16), dtype="float32")
+    temp = T.sblock_alloc_buffer((16, 16), dtype="float32")
     for i, j, k in T.grid(16, 16, 16):
         with T.sblock("matmul"):
             vi, vj, vk = T.axis.remap("SSR", [i, j, k])
@@ -61,7 +61,7 @@ def matmul_bias_relu_before_per_iteration(
     D: T.Buffer((16, 16), "float32"),
 ) -> None:
     """Original function with per-iteration ReLU (same semantics as fused)."""
-    temp = T.alloc_buffer((16, 16), dtype="float32")
+    temp = T.sblock_alloc_buffer((16, 16), dtype="float32")
     for i, j in T.grid(16, 16):
         with T.sblock("init"):
             vi, vj = T.axis.remap("SS", [i, j])
@@ -87,7 +87,7 @@ def matmul_bias_relu_expected(
     D: T.Buffer((16, 16), "float32"),
 ) -> None:
     """Expected function after fusion (Bias + ReLU)."""
-    temp = T.alloc_buffer((16, 16), dtype="float32")
+    temp = T.sblock_alloc_buffer((16, 16), dtype="float32")
     for i, j, k in T.grid(16, 16, 16):
         with T.sblock("matmul"):
             vi, vj, vk = T.axis.remap("SSR", [i, j, k])
@@ -163,7 +163,7 @@ def matmul_bias_relu_multiple_epilogue_before(
     E: T.Buffer((16, 16), "float32"),
 ) -> None:
     """Original function with separate reduction and multiple epilogue blocks (one with ReLU, one without)."""
-    temp = T.alloc_buffer((16, 16), dtype="float32")
+    temp = T.sblock_alloc_buffer((16, 16), dtype="float32")
     for i, j, k in T.grid(16, 16, 16):
         with T.sblock("matmul"):
             vi, vj, vk = T.axis.remap("SSR", [i, j, k])
@@ -191,7 +191,7 @@ def matmul_bias_relu_multiple_epilogue_expected(
     E: T.Buffer((16, 16), "float32"),
 ) -> None:
     """Expected function after fusion (Bias + ReLU) with multiple epilogue blocks."""
-    temp = T.alloc_buffer((16, 16), dtype="float32")
+    temp = T.sblock_alloc_buffer((16, 16), dtype="float32")
     for i, j, k in T.grid(16, 16, 16):
         with T.sblock("matmul"):
             vi, vj, vk = T.axis.remap("SSR", [i, j, k])

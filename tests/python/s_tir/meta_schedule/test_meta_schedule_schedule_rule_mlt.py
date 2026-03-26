@@ -25,7 +25,7 @@ from tvm.s_tir.meta_schedule.testing.space_generation import (
     generate_design_space,
     print_sketches,
 )
-from tvm.script import tir as T
+from tvm.script import tirx as T
 from tvm.target import Target
 
 
@@ -37,10 +37,10 @@ def test_cpu_matmul():
         C: T.Buffer((512, 512), "float32"),
     ) -> None:
         # function attr dict
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
+        T.func_attr({"global_symbol": "main", "tirx.noalias": True})
         # body
         # with T.sblock("root")
-        C_global = T.alloc_buffer([512, 512], dtype="float32")
+        C_global = T.sblock_alloc_buffer([512, 512], dtype="float32")
         for i0_0, i1_0, i0_1, i1_1 in T.grid(1, 8, 8, 1):
             for i2_0, i0_2, i1_2, i2_1, i0_3, i1_3 in T.grid(16, 2, 8, 32, 32, 8):
                 with T.sblock("C"):
@@ -68,10 +68,10 @@ def test_cpu_matmul():
         C: T.Buffer((512, 512), "float32"),
     ) -> None:
         # function attr dict
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
+        T.func_attr({"global_symbol": "main", "tirx.noalias": True})
         # body
         # with T.sblock("root")
-        C_global = T.alloc_buffer([512, 512], dtype="float32")
+        C_global = T.sblock_alloc_buffer([512, 512], dtype="float32")
         for i0_0, i1_0 in T.grid(1, 8):
             for i0_1, i1_1, i2_0, i0_2, i1_2, i2_1, i0_3, i1_3 in T.grid(8, 1, 16, 2, 8, 32, 32, 8):
                 with T.sblock("C"):
@@ -99,7 +99,7 @@ def test_cpu_matmul():
         C: T.Buffer((512, 512), "float32"),
     ) -> None:
         # function attr dict
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
+        T.func_attr({"global_symbol": "main", "tirx.noalias": True})
         # body
         # with T.sblock("root")
         for i0_0, i1_0, i0_1, i1_1, i2_0, i0_2, i1_2, i2_1, i0_3, i1_3 in T.grid(
@@ -155,10 +155,10 @@ def test_cpu_matmul_relu():
         compute: T.Buffer((512, 512), "float32"),
     ) -> None:
         # function attr dict
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
+        T.func_attr({"global_symbol": "main", "tirx.noalias": True})
         # body
         # with T.sblock("root")
-        C = T.alloc_buffer([512, 512], dtype="float32")
+        C = T.sblock_alloc_buffer([512, 512], dtype="float32")
         for i0_0, i1_0, i0_1, i1_1, i2_0, i0_2, i1_2, i2_1, i0_3, i1_3 in T.grid(
             256, 4, 1, 4, 64, 1, 32, 8, 2, 1
         ):
@@ -186,10 +186,10 @@ def test_cpu_matmul_relu():
         compute: T.Buffer((512, 512), "float32"),
     ) -> None:
         # function attr dict
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
+        T.func_attr({"global_symbol": "main", "tirx.noalias": True})
         # body
         # with T.sblock("root")
-        C = T.alloc_buffer([512, 512], dtype="float32")
+        C = T.sblock_alloc_buffer([512, 512], dtype="float32")
         for i0_0, i1_0, i0_1, i1_1 in T.grid(256, 4, 1, 4):
             for i2_0, i0_2, i1_2, i2_1, i0_3, i1_3 in T.grid(64, 1, 32, 8, 2, 1):
                 with T.sblock("C"):
@@ -217,10 +217,10 @@ def test_cpu_matmul_relu():
         compute: T.Buffer((512, 512), "float32"),
     ) -> None:
         # function attr dict
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
+        T.func_attr({"global_symbol": "main", "tirx.noalias": True})
         # body
         # with T.sblock("root")
-        C = T.alloc_buffer([512, 512], dtype="float32")
+        C = T.sblock_alloc_buffer([512, 512], dtype="float32")
         for i0_0, i1_0 in T.grid(256, 4):
             for i0_1, i1_1, i2_0, i0_2, i1_2, i2_1, i0_3, i1_3 in T.grid(1, 4, 64, 1, 32, 8, 2, 1):
                 with T.sblock("C"):
@@ -279,12 +279,12 @@ def test_cuda_matmul():
         C: T.Buffer((512, 512), "float32"),
     ) -> None:
         # function attr dict
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
+        T.func_attr({"global_symbol": "main", "tirx.noalias": True})
         # body
         # with T.sblock("root")
-        C_local = T.alloc_buffer([512, 512], dtype="float32", scope="local")
-        A_shared = T.alloc_buffer([512, 512], dtype="float32", scope="shared")
-        B_shared = T.alloc_buffer([512, 512], dtype="float32", scope="shared")
+        C_local = T.sblock_alloc_buffer([512, 512], dtype="float32", scope="local")
+        A_shared = T.sblock_alloc_buffer([512, 512], dtype="float32", scope="shared")
+        B_shared = T.sblock_alloc_buffer([512, 512], dtype="float32", scope="shared")
         for i0_0_i1_0_fused in T.thread_binding(128, thread="blockIdx.x"):
             for i0_1_i1_1_fused in T.thread_binding(8, thread="vthread.x"):
                 for i0_2_i1_2_fused in T.thread_binding(4, thread="threadIdx.x"):
@@ -385,13 +385,13 @@ def test_cuda_matmul_relu():
         compute: T.Buffer((512, 512), "float32"),
     ) -> None:
         # function attr dict
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
+        T.func_attr({"global_symbol": "main", "tirx.noalias": True})
         # body
         # with T.sblock("root")
-        C = T.alloc_buffer([512, 512], dtype="float32")
-        C_local = T.alloc_buffer([512, 512], dtype="float32", scope="local")
-        A_shared = T.alloc_buffer([512, 512], dtype="float32", scope="shared")
-        B_shared = T.alloc_buffer([512, 512], dtype="float32", scope="shared")
+        C = T.sblock_alloc_buffer([512, 512], dtype="float32")
+        C_local = T.sblock_alloc_buffer([512, 512], dtype="float32", scope="local")
+        A_shared = T.sblock_alloc_buffer([512, 512], dtype="float32", scope="shared")
+        B_shared = T.sblock_alloc_buffer([512, 512], dtype="float32", scope="shared")
         for i0_0_i1_0_fused in T.thread_binding(64, thread="blockIdx.x"):
             for i0_1_i1_1_fused in T.thread_binding(64, thread="vthread.x"):
                 for i0_2_i1_2_fused in T.thread_binding(8, thread="threadIdx.x"):
@@ -528,8 +528,8 @@ def test_multi_level_tiling_hexagon():
         weight: T.Buffer((3, 3, 64, 64), "float16"),
         conv2d_nhwc: T.Buffer((1, 56, 56, 64), "float16"),
     ) -> None:
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
-        PadInput = T.alloc_buffer((1, 58, 58, 64), "float16")
+        T.func_attr({"global_symbol": "main", "tirx.noalias": True})
+        PadInput = T.sblock_alloc_buffer((1, 58, 58, 64), "float16")
         for i0, i1, i2, i3 in T.grid(1, 58, 58, 64):
             with T.sblock("PadInput"):
                 v_i0, v_i1, v_i2, v_i3 = T.axis.remap("SSSS", [i0, i1, i2, i3])
@@ -633,11 +633,11 @@ def test_cache_read_specify_consumer():
         B: T.Buffer((512, 512), "float32"),
         T_add: T.Buffer((512, 512), "float32"),
     ):
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
-        C = T.alloc_buffer((512, 512))
-        C_local = T.alloc_buffer((512, 512), scope="local")
-        A_shared = T.alloc_buffer((512, 512), scope="shared")
-        B_shared = T.alloc_buffer((512, 512), scope="shared")
+        T.func_attr({"global_symbol": "main", "tirx.noalias": True})
+        C = T.sblock_alloc_buffer((512, 512))
+        C_local = T.sblock_alloc_buffer((512, 512), scope="local")
+        A_shared = T.sblock_alloc_buffer((512, 512), scope="shared")
+        B_shared = T.sblock_alloc_buffer((512, 512), scope="shared")
         for i_0_j_0_fused in T.thread_binding(2, thread="blockIdx.x"):
             for i_1_j_1_fused in T.thread_binding(512, thread="vthread.x"):
                 for i_2_j_2_fused in T.thread_binding(16, thread="threadIdx.x"):
@@ -742,9 +742,9 @@ def test_max_pool_blocked():
         X: T.Buffer((1, 2, 8, 8, 8, 8, 32), "uint8"),
         pool: T.Buffer((1, 2, 4, 4, 8, 8, 32), "uint8"),
     ):
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
-        pool_global = T.alloc_buffer((1, 2, 4, 4, 8, 8, 32), "uint8")
-        X_global = T.alloc_buffer((1, 2, 8, 8, 8, 8, 32), "uint8")
+        T.func_attr({"global_symbol": "main", "tirx.noalias": True})
+        pool_global = T.sblock_alloc_buffer((1, 2, 4, 4, 8, 8, 32), "uint8")
+        X_global = T.sblock_alloc_buffer((1, 2, 8, 8, 8, 8, 32), "uint8")
         for b_0, c_o_0, h_o_0, w_o_0, h_i_0, w_i_0, c_i_0 in T.grid(1, 2, 4, 1, 8, 1, 4):
             for ax0_ax1_ax2_ax3_ax4_ax5_ax6_fused in range(896):
                 with T.sblock("X_global"):

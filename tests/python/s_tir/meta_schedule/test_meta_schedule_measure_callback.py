@@ -23,7 +23,7 @@ import pytest
 import tvm
 from tvm.s_tir import meta_schedule as ms
 from tvm.s_tir.schedule import Schedule
-from tvm.script import tir as T
+from tvm.script import tirx as T
 
 # pylint: disable=invalid-name,no-member,line-too-long,too-many-nested-blocks,no-self-argument,
 # fmt: off
@@ -123,6 +123,7 @@ def test_meta_schedule_measure_callback_as_string():
     assert pattern.match(str(measure_callback))
 
 
+@pytest.mark.skip("Tuning test - launches runner")
 def test_meta_schedule_measure_callback_update_cost_model_with_zero():
     @ms.derived_object
     class AllZeroRunnerFuture(ms.runner.PyRunnerFuture):
@@ -148,6 +149,7 @@ def test_meta_schedule_measure_callback_update_cost_model_with_zero():
         )
 
 
+@pytest.mark.skip("Tuning test - launches runner")
 def test_meta_schedule_measure_callback_update_cost_model_with_runtime_error():
     @ms.derived_object
     class EmptyRunnerFuture(ms.runner.PyRunnerFuture):

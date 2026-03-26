@@ -22,13 +22,13 @@ import pytest
 
 import tvm
 import tvm.testing
-from tvm import tir
+from tvm import tirx
 from tvm.s_tir.schedule.testing import (
     assert_structural_equal_ignore_global_symbol,
     verify_trace_roundtrip,
 )
 from tvm.script import ir as I
-from tvm.script import tir as T
+from tvm.script import tirx as T
 
 # pylint: disable=no-member,invalid-name,unused-variable,unexpected-keyword-arg
 
@@ -308,7 +308,7 @@ def test_decompose_reduction_nested_block():
         for i, ko in T.grid(1, 2):
             with T.sblock("outer"):
                 vi, vko = T.axis.remap("SR", [i, ko])
-                C = T.alloc_buffer((32,), dtype="float32")
+                C = T.sblock_alloc_buffer((32,), dtype="float32")
                 with T.init():
                     B[vi] = T.float32(0)
                 for ki in T.serial(32):
@@ -333,7 +333,7 @@ def test_decompose_reduction_nested_block():
                     vi, vko = T.axis.remap("SR", [i, ko])
                     T.reads(B[vi], A[vi, vko * 32 : vko * 32 + 32])
                     T.writes(B[vi])
-                    C = T.alloc_buffer((32,))
+                    C = T.sblock_alloc_buffer((32,))
                     for ki in range(32):
                         with T.sblock("inner_1"):
                             vki = T.axis.spatial(32, ki)

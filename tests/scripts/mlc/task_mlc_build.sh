@@ -17,6 +17,20 @@
 # under the License.
 set -euxo pipefail
 
+<<<<<<<< HEAD:tests/scripts/mlc/task_mlc_build.sh
 cd build
 cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ..
 make -j8
+========
+
+def test_decorate_device():
+    x = tvm.tirx.Var("x", "int32")
+    mod = tvm.IRModule.from_expr(tvm.tirx.PrimFunc([x], tvm.tirx.Evaluate(x)))
+
+    stmt = tvm.s_tir.transform.DecorateDeviceScope()(mod)["main"].body
+    assert stmt.attr_key == "device_scope"
+
+
+if __name__ == "__main__":
+    test_decorate_device()
+>>>>>>>> upstream/mlc:tests/python/s_tir/transform/test_s_tir_transform_decorate_device_scope.py

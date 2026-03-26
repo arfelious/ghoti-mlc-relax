@@ -17,13 +17,14 @@
  * under the License.
  */
 #include <tvm/ffi/reflection/registry.h>
+#include <tvm/s_tir/stmt.h>
 #include <tvm/s_tir/transform.h>
 
 #include "../utils.h"
 
 namespace tvm {
 namespace s_tir {
-using namespace tvm::tir;
+using namespace tvm::tirx;
 
 /*! \brief Check if an IRModule has any async strided mem copies. */
 struct AsyncStridedMemCopyFinder : private StmtExprVisitor {
@@ -51,7 +52,7 @@ struct AsyncStridedMemCopyFinder : private StmtExprVisitor {
 
   void VisitStmt_(const AttrStmtNode* attrStmt) final {
     if (!found_) {
-      if (attrStmt->attr_key == tir::attr::async_commit_queue_scope) {
+      if (attrStmt->attr_key == s_tir::attr::async_commit_queue_scope) {
         auto async_scope = attrStmt->body.as<AttrStmtNode>();
         if (!async_scope) {
           StmtExprVisitor::VisitStmt_(attrStmt);
@@ -135,11 +136,11 @@ class DisallowAsyncStridedMemCopyNode : public PostprocNode {
     for (const auto& kv : mod->functions) {
       const GlobalVar& g_var = kv.first;
       const BaseFunc& base_func = kv.second;
-      if (const auto* prim_func = base_func.as<tir::PrimFuncNode>()) {
+      if (const auto* prim_func = base_func.as<tirx::PrimFuncNode>()) {
         IRModule lowered{ffi::UnsafeInit()};
         try {
           auto pass_list = ffi::Array<tvm::transform::Pass>();
-          pass_list.push_back(tir::transform::BindTarget(this->target));
+          pass_list.push_back(tirx::transform::BindTarget(this->target));
           pass_list.push_back(s_tir::transform::LowerInitBlock());
           pass_list.push_back(s_tir::transform::PlanAndUpdateBufferAllocationLocation());
           pass_list.push_back(s_tir::transform::ConvertBlocksToOpaque());
@@ -147,16 +148,16 @@ class DisallowAsyncStridedMemCopyNode : public PostprocNode {
           pass_list.push_back(s_tir::transform::LowerMatchBuffer());
           pass_list.push_back(s_tir::transform::InjectSoftwarePipeline());
           pass_list.push_back(s_tir::transform::LowerOpaqueBlock());
-          pass_list.push_back(tir::transform::FlattenBuffer());
-          pass_list.push_back(tir::transform::BF16ComputeLegalize());
-          pass_list.push_back(tir::transform::NarrowDataType(32));
-          pass_list.push_back(tir::transform::Simplify());
+          pass_list.push_back(tirx::transform::FlattenBuffer());
+          pass_list.push_back(tirx::transform::BF16ComputeLegalize());
+          pass_list.push_back(tirx::transform::NarrowDataType(32));
+          pass_list.push_back(tirx::transform::Simplify());
           pass_list.push_back(s_tir::transform::InjectVirtualThread());
           pass_list.push_back(s_tir::transform::InjectDoubleBuffer());
-          pass_list.push_back(tir::transform::VectorizeLoop(true));
-          pass_list.push_back(tir::transform::StorageRewrite());
-          tir::PrimFunc f = WithAttr(ffi::GetRef<tir::PrimFunc>(prim_func), "global_symbol",
-                                     ffi::String(g_var->name_hint));
+          pass_list.push_back(tirx::transform::VectorizeLoop(true));
+          pass_list.push_back(tirx::transform::StorageRewrite());
+          tirx::PrimFunc f = WithAttr(ffi::GetRef<tirx::PrimFunc>(prim_func), "global_symbol",
+                                      ffi::String(g_var->name_hint));
           IRModule mod =
               IRModule(ffi::Map<GlobalVar, BaseFunc>({{GlobalVar(g_var->name_hint), f}}));
           lowered = tvm::transform::Sequential(pass_list)(std::move(mod));

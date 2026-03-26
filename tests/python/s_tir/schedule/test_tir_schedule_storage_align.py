@@ -19,12 +19,12 @@
 import pytest
 
 import tvm
-from tvm import tir
+from tvm import tirx
 from tvm.s_tir.schedule.testing import (
     assert_structural_equal_ignore_global_symbol,
     verify_trace_roundtrip,
 )
-from tvm.script import tir as T
+from tvm.script import tirx as T
 
 # fmt: off
 # pylint: disable=no-member,invalid-name,unused-variable,line-too-long,redefined-outer-name
@@ -37,7 +37,7 @@ def element_wise(a: T.handle, c: T.handle) -> None:
     with T.sblock("root"):
         T.reads([])
         T.writes([])
-        B = T.alloc_buffer([128, 128], elem_offset=0, align=64, offset_factor=1)
+        B = T.sblock_alloc_buffer([128, 128], elem_offset=0, align=64, offset_factor=1)
         for i0 in T.serial(0, 128):
             for ax1 in T.serial(0, 128):
                 with T.sblock("B"):
@@ -61,7 +61,7 @@ def element_wise_storage_align(a: T.handle, c: T.handle) -> None:
     with T.sblock("root"):
         T.reads([])
         T.writes([])
-        B = T.alloc_buffer([128, 128], elem_offset=0, align=64, offset_factor=1)
+        B = T.sblock_alloc_buffer([128, 128], elem_offset=0, align=64, offset_factor=1)
         for i0 in T.serial(0, 128):
             for ax1 in T.serial(0, 128):
                 with T.sblock("B"):
@@ -86,7 +86,7 @@ def element_wise_invalid_annotation(a: T.handle, c: T.handle) -> None:
     with T.sblock("root"):
         T.reads([])
         T.writes([])
-        B = T.alloc_buffer([128, 128], elem_offset=0, align=64, offset_factor=1)
+        B = T.sblock_alloc_buffer([128, 128], elem_offset=0, align=64, offset_factor=1)
         for i0 in T.serial(0, 128):
             for ax1 in T.serial(0, 128):
                 with T.sblock("B"):

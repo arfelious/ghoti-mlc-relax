@@ -398,8 +398,15 @@ std::string CodeGenOpenCL::CastTo(std::string value, DataType target) {
   }
 }
 
-void CodeGenOpenCL::VisitStmt_(const AllocateNode* op) {
-  allocation_size_.insert({op->buffer_var.get(), op->ConstantAllocationSize() * op->dtype.lanes()});
+void CodeGenOpenCL::VisitStmt_(const AllocBufferNode* op) {
+  // Compute constant_size from buffer shape
+  size_t constant_size = 1;
+  for (const auto& dim : op->buffer->shape) {
+    const IntImmNode* dim_imm = dim.as<IntImmNode>();
+    TVM_FFI_ICHECK(dim_imm) << "Can only handle constant size stack allocation for now";
+    constant_size *= dim_imm->value;
+  }
+  allocation_size_.insert({op->buffer->data.get(), constant_size * op->buffer->dtype.lanes()});
   CodeGenC::VisitStmt_(op);
 }
 
@@ -488,12 +495,13 @@ void CodeGenOpenCL::VisitExpr_(const CallNode* op, std::ostream& os) {
 
     std::string rhs = SSAGetID(ss.str(), op->dtype.with_lanes(data_lanes));
     if (auto ramp = op->args.back().as<RampNode>()) {
-      if (ramp->base.as<IntImmNode>() && *tir::as_const_int(ramp->base) == 0 &&
-          *tir::as_const_int(ramp->lanes) == data_lanes && *tir::as_const_int(ramp->stride) == 1) {
+      if (ramp->base.as<IntImmNode>() && *tirx::as_const_int(ramp->base) == 0 &&
+          *tirx::as_const_int(ramp->lanes) == data_lanes &&
+          *tirx::as_const_int(ramp->stride) == 1) {
         os << rhs;
-      } else if (*tir::as_const_int(ramp->stride) == 1) {
+      } else if (*tirx::as_const_int(ramp->stride) == 1) {
         os << "(*(";
-        this->PrintType(op->dtype.with_lanes(*tir::as_const_int(ramp->lanes)), os);
+        this->PrintType(op->dtype.with_lanes(*tirx::as_const_int(ramp->lanes)), os);
         os << "*)";
         os << "((";
         this->PrintType(op->dtype.with_lanes(1), os);

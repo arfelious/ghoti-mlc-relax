@@ -22,22 +22,23 @@
  */
 #include <tvm/ffi/function.h>
 #include <tvm/ffi/reflection/registry.h>
+#include <tvm/s_tir/stmt.h>
 #include <tvm/s_tir/transform.h>
-#include <tvm/tir/analysis.h>
-#include <tvm/tir/builtin.h>
-#include <tvm/tir/expr.h>
-#include <tvm/tir/stmt_functor.h>
+#include <tvm/tirx/analysis.h>
+#include <tvm/tirx/builtin.h>
+#include <tvm/tirx/expr.h>
+#include <tvm/tirx/stmt_functor.h>
 
 #include <unordered_map>
 #include <unordered_set>
 
 #include "../../runtime/thread_storage_scope.h"
-#include "../../tir/transform/ir_utils.h"
+#include "../../tirx/transform/ir_utils.h"
 #include "storage_access.h"
 
 namespace tvm {
 namespace s_tir {
-using namespace tvm::tir;
+using namespace tvm::tirx;
 
 class ThreadSyncPlanner : public StorageAccessVisitor {
  public:
@@ -232,7 +233,7 @@ class ThreadSyncPlanner : public StorageAccessVisitor {
         PrimExpr curr_index = curr_intset.PointValue();
         has_same_index = ExprDeepEqual()(prev_index, curr_index);
         if (thread_index_var != nullptr) {
-          auto f_uses_thread_index = [=](const tvm::tir::VarNode* parameter) {
+          auto f_uses_thread_index = [=](const tvm::tirx::VarNode* parameter) {
             return parameter == thread_index_var;
           };
           depends_on_thread_index = depends_on_thread_index &&
@@ -292,15 +293,16 @@ class ThreadSyncAfterWaitQueueInserter : public StmtExprMutator {
   explicit ThreadSyncAfterWaitQueueInserter(StorageScope sync_scope) : sync_scope_(sync_scope) {}
 
   Stmt VisitStmt_(const AttrStmtNode* op) final {
-    if (op->attr_key == tir::attr::async_wait_queue_scope) {
+    if (op->attr_key == s_tir::attr::async_wait_queue_scope) {
       auto sync = Evaluate(Call(DataType::Int(32), builtin::tvm_storage_sync(),
                                 {StringImm(sync_scope_.to_string())}));
       auto inner = op->body.as<AttrStmtNode>();
-      TVM_FFI_ICHECK(inner && inner->attr_key == tir::attr::async_wait_inflight_count);
+      TVM_FFI_ICHECK(inner && inner->attr_key == s_tir::attr::async_wait_inflight_count);
       auto zero = make_zero(DataType::Int(32));
       auto new_body = SeqStmt({sync, inner->body});
-      return AttrStmt(zero, tir::attr::async_wait_queue_scope, op->value,
-                      AttrStmt(zero, tir::attr::async_wait_inflight_count, inner->value, new_body));
+      return AttrStmt(
+          zero, s_tir::attr::async_wait_queue_scope, op->value,
+          AttrStmt(zero, s_tir::attr::async_wait_inflight_count, inner->value, new_body));
     }
     return StmtExprMutator::VisitStmt_(op);
   }
@@ -347,7 +349,7 @@ class ThreadSyncInserter : public StmtExprMutator {
     return StmtExprMutator::VisitStmt_(op);
   }
   Stmt VisitStmt_(const AttrStmtNode* op) final {
-    if (op->attr_key == tir::attr::thread_extent) {
+    if (op->attr_key == tirx::attr::thread_extent) {
       bool temp = true;
       std::swap(temp, in_thread_env_);
       thread_extents_.push_back(op);
@@ -364,6 +366,17 @@ class ThreadSyncInserter : public StmtExprMutator {
     } else {
       return StmtExprMutator::VisitStmt_(op);
     }
+  }
+
+  Stmt VisitStmt_(const AllocBufferNode* op) final {
+    auto node = Downcast<AllocBuffer>(StmtExprMutator::VisitStmt_(op));
+    if (volatile_vars_.count(op->buffer->data.get())) {
+      auto* cow = node.CopyOnWrite();
+      auto annotations = cow->annotations;
+      annotations.Set(tirx::attr::kVolatile, Bool(true));
+      cow->annotations = annotations;
+    }
+    return node;
   }
 
   PrimExpr VisitExpr_(const CallNode* op) final {
@@ -408,7 +421,7 @@ class ThreadSyncInserter : public StmtExprMutator {
     for (const auto& kv : rw_stats_) {
       const auto& e = kv.second;
       if (e.read_count != 0 && e.write_count != 0) {
-        body = AttrStmt(kv.first, tir::attr::volatile_scope, 1, body);
+        volatile_vars_.insert(kv.first.get());
       }
     }
     rw_stats_.clear();
@@ -443,6 +456,8 @@ class ThreadSyncInserter : public StmtExprMutator {
   const std::unordered_set<const Object*>& syncs_;
   // The read write statistics of storage
   std::unordered_map<Var, Entry> rw_stats_;
+  // Set of buffer data vars that should be marked volatile.
+  std::unordered_set<const VarNode*> volatile_vars_;
   // The statistics for global barrier
   bool in_thread_env_{false};
   // memorized results

@@ -24,7 +24,10 @@ from tvm.relax.transform.legalize_ops import adreno as legalize_adreno
 def library_dispatch_passes(target: tvm.target.Target):  # pylint: disable=unused-argument
     """The default library dispatch passes for Adreno GPU backend."""
     if "clml" in target.keys:
-        return [relax.backend.adreno.clml.OpenCLMLOffLoad()]
+        return [
+            relax.backend.adreno.clml.OpenCLMLOffLoadForLLM(target),
+            relax.backend.adreno.clml.OpenCLMLOffLoad(),
+        ]
     else:
         return []
 
@@ -41,7 +44,7 @@ def legalize_passes(target: tvm.target.Target):  # pylint: disable=unused-argume
 
     pass_list.extend(
         [
-            tvm.tir.transform.BindTarget(tvm.target.Target.current(allow_none=False)),
+            tvm.tirx.transform.BindTarget(tvm.target.Target.current(allow_none=False)),
             relax.transform.DecomposeOpsForInference(),
         ]
     )

@@ -27,12 +27,12 @@ import pytest
 
 import tvm
 import tvm.testing
-from tvm import tir
+from tvm import tirx
 from tvm.ir.module import IRModule
 from tvm.s_tir import Schedule
 from tvm.s_tir import meta_schedule as ms
 from tvm.s_tir.meta_schedule.database import TuningRecord, Workload
-from tvm.script import tir as T
+from tvm.script import tirx as T
 from tvm.target import Target
 
 
@@ -58,11 +58,11 @@ class Matmul:
 class MatmulRelu:
     @T.prim_func
     def main(a: T.handle, b: T.handle, d: T.handle) -> None:  # pylint: disable=no-self-argument
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
+        T.func_attr({"global_symbol": "main", "tirx.noalias": True})
         A = T.match_buffer(a, (16, 16), "float32")
         B = T.match_buffer(b, (16, 16), "float32")
         D = T.match_buffer(d, (16, 16), "float32")
-        C = T.alloc_buffer((16, 16), "float32")
+        C = T.sblock_alloc_buffer((16, 16), "float32")
         for i, j, k in T.grid(16, 16, 16):
             with T.sblock("matmul"):
                 vi, vj, vk = T.axis.remap("SSR", [i, j, k])

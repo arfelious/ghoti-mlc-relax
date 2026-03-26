@@ -22,12 +22,12 @@ import pytest
 
 import tvm
 import tvm.testing
-from tvm import tir
+from tvm import tirx
 from tvm.s_tir.schedule.testing import (
     assert_structural_equal_ignore_global_symbol,
     verify_trace_roundtrip,
 )
-from tvm.script import tir as T
+from tvm.script import tirx as T
 
 # pylint: disable=no-member,invalid-name,unused-variable
 
@@ -68,7 +68,7 @@ def element_wise_i_bound(a: T.handle, b: T.handle) -> None:
 def element_wise_compute_at_split(a: T.handle, c: T.handle) -> None:
     A = T.match_buffer(a, (128, 128))
     C = T.match_buffer(c, (128, 128))
-    B = T.alloc_buffer((128, 128))
+    B = T.sblock_alloc_buffer((128, 128))
     for i in T.serial(0, 128):
         for j0 in T.serial(0, 128):
             with T.sblock("B"):
@@ -85,7 +85,7 @@ def element_wise_compute_at_split(a: T.handle, c: T.handle) -> None:
 def element_wise_compute_at_split_vectorized(a: T.handle, c: T.handle) -> None:
     A = T.match_buffer(a, (128, 128))
     C = T.match_buffer(c, (128, 128))
-    B = T.alloc_buffer((128, 128))
+    B = T.sblock_alloc_buffer((128, 128))
     for i in T.serial(0, 128):
         for j0 in T.serial(0, 128):
             with T.sblock("B"):
@@ -142,7 +142,7 @@ def element_wise_split_predicate_vectorized(a: T.handle, b: T.handle) -> None:
 def element_wise_compute_at_split_j0_j1o_bound(a: T.handle, c: T.handle) -> None:
     A = T.match_buffer(a, (128, 128))
     C = T.match_buffer(c, (128, 128))
-    B = T.alloc_buffer((128, 128))
+    B = T.sblock_alloc_buffer((128, 128))
     for i in T.serial(0, 128):
         for j0 in T.thread_binding(0, 128, thread="threadIdx.x"):
             with T.sblock("B"):
@@ -288,7 +288,7 @@ def decomposed_gemm(
     B: T.Buffer((16, 16), "float32"),
     C: T.Buffer((16, 16), "float32"),
 ):
-    local = T.alloc_buffer((16, 16), "float32")
+    local = T.sblock_alloc_buffer((16, 16), "float32")
     for i, j in T.grid(4, 4):
         for ii, jj in T.grid(4, 4):
             with T.sblock("init"):
@@ -314,7 +314,7 @@ def decomposed_gemm_after_vectorize(
     B: T.Buffer((16, 16), "float32"),
     C: T.Buffer((16, 16), "float32"),
 ):
-    local = T.alloc_buffer((16, 16), "float32")
+    local = T.sblock_alloc_buffer((16, 16), "float32")
     for i, j in T.grid(4, 4):
         for ii, jj in T.grid(4, 4):
             with T.sblock("init"):
@@ -374,7 +374,7 @@ def nested_block_bind_after_cache_read(
     for i in T.serial(16):
         with T.sblock("outer"):
             vi = T.axis.spatial(16, i)
-            A_shared = T.alloc_buffer([1, 16], dtype="float32", scope="shared")
+            A_shared = T.sblock_alloc_buffer([1, 16], dtype="float32", scope="shared")
             for ax0, ax1 in T.grid(1, 16):
                 with T.sblock("A_shared"):
                     v0 = T.axis.spatial(16, vi + ax0)
@@ -395,7 +395,7 @@ def thread_bound_nested_block_after_cache_read(
     for i in T.thread_binding(16, thread="blockIdx.x"):
         with T.sblock("outer"):
             vi = T.axis.spatial(16, i)
-            A_shared = T.alloc_buffer([1, 16], dtype="float32", scope="shared")
+            A_shared = T.sblock_alloc_buffer([1, 16], dtype="float32", scope="shared")
             for ax0, ax1 in T.grid(1, 16):
                 with T.sblock("A_shared"):
                     v0 = T.axis.spatial(16, vi + ax0)
@@ -415,7 +415,7 @@ def decomposed_gemm_parallelize_init(
     B: T.Buffer((16, 16), "float32"),
     C: T.Buffer((16, 16), "float32"),
 ) -> None:
-    local = T.alloc_buffer([16, 16], dtype="float32")
+    local = T.sblock_alloc_buffer([16, 16], dtype="float32")
     for i, j in T.grid(4, 4):
         for ii in T.serial(4):
             for jj in T.vectorized(4):

@@ -27,7 +27,7 @@
 #include <tvm/ffi/reflection/accessor.h>
 #include <tvm/ffi/reflection/registry.h>
 #include <tvm/relax/struct_info.h>
-#include <tvm/tir/op.h>
+#include <tvm/tirx/op.h>
 
 #include <cstdint>
 #include <memory>
@@ -232,7 +232,7 @@ class JSONSerializer : public relax::MemoizedExprTranslator<NodeEntries> {
    * \param constant_names The names of all constants in the original module.
    */
   explicit JSONSerializer(const ffi::Map<Constant, ffi::String>& constant_names)
-      : constant_names_(constant_names) {}
+      : constant_names_(std::move(constant_names)) {}
 
   void serialize(Function func) {
     // First we convert all the parameters into input nodes.
@@ -493,7 +493,7 @@ class JSONSerializer : public relax::MemoizedExprTranslator<NodeEntries> {
   /*! \brief The list of required constants, ordered. */
   ffi::Array<ffi::String> constants_used_;
   /*! \brief The names of all constants in the original module. */
-  const ffi::Map<Constant, ffi::String>& constant_names_;
+  const ffi::Map<Constant, ffi::String> constant_names_;
 };
 
 }  // namespace contrib

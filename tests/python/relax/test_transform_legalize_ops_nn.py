@@ -23,7 +23,7 @@ import tvm.testing
 from tvm.relax.transform import LegalizeOps
 from tvm.script import ir as I
 from tvm.script import relax as R
-from tvm.script import tir as T
+from tvm.script import tirx as T
 
 ##################### Neural network #####################
 
@@ -46,8 +46,8 @@ def test_conv1d():
 
         @T.prim_func(private=True)
         def conv1d(A: T.Buffer((T.int64(2), T.int64(128), T.int64(28)), "float32"), B: T.Buffer((T.int64(64), T.int64(16), T.int64(3)), "float32"), group_conv1d_ncw: T.Buffer((T.int64(2), T.int64(64), T.int64(13)), "float32")):
-            T.func_attr({"tir.noalias": True})
-            pad_temp = T.alloc_buffer((T.int64(2), T.int64(128), T.int64(30)))
+            T.func_attr({"tirx.noalias": True})
+            pad_temp = T.sblock_alloc_buffer((T.int64(2), T.int64(128), T.int64(30)))
             for i0, i1, i2 in T.grid(T.int64(2), T.int64(128), T.int64(30)):
                 with T.sblock("pad_temp"):
                     v_i0, v_i1, v_i2 = T.axis.remap("SSS", [i0, i1, i2])
@@ -86,9 +86,9 @@ def test_conv1d_with_out_dtype():
 
         @T.prim_func(private=True)
         def conv1d(rxplaceholder: T.Buffer((T.int64(2), T.int64(3), T.int64(28)), "float32"), rxplaceholder_1: T.Buffer((T.int64(4), T.int64(3), T.int64(3)), "float32"), conv1d_ncw: T.Buffer((T.int64(2), T.int64(4), T.int64(26)), "float16")):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             # with T.sblock("root"):
-            pad_temp = T.alloc_buffer((T.int64(2), T.int64(3), T.int64(28)))
+            pad_temp = T.sblock_alloc_buffer((T.int64(2), T.int64(3), T.int64(28)))
             for i0, i1, i2 in T.grid(T.int64(2), T.int64(3), T.int64(28)):
                 with T.sblock("pad_temp"):
                     v_i0, v_i1, v_i2 = T.axis.remap("SSS", [i0, i1, i2])
@@ -127,9 +127,9 @@ def test_conv1d_nwc():
 
         @T.prim_func(private=True)
         def conv1d(rxplaceholder: T.Buffer((T.int64(2), T.int64(28), T.int64(128)), "float32"), rxplaceholder_1: T.Buffer((T.int64(64), T.int64(128), T.int64(3)), "float32"), conv1d_nwc: T.Buffer((T.int64(2), T.int64(26), T.int64(64)), "float32")):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             # with T.sblock("root"):
-            pad_temp = T.alloc_buffer((T.int64(2), T.int64(28), T.int64(128)))
+            pad_temp = T.sblock_alloc_buffer((T.int64(2), T.int64(28), T.int64(128)))
             for i0, i1, i2 in T.grid(T.int64(2), T.int64(28), T.int64(128)):
                 with T.sblock("pad_temp"):
                     v_i0, v_i1, v_i2 = T.axis.remap("SSS", [i0, i1, i2])
@@ -177,14 +177,14 @@ def test_conv1d_symbolic():
 
         @T.prim_func(private=True)
         def conv1d(var_rxplaceholder: T.handle, var_rxplaceholder_1: T.handle, var_conv1d_ncw: T.handle):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             n, c, w = T.int64(), T.int64(), T.int64()
             rxplaceholder = T.match_buffer(var_rxplaceholder, (n, c, w))
             f, kw = T.int64(), T.int64()
             rxplaceholder_1 = T.match_buffer(var_rxplaceholder_1, (f, c, kw))
             conv1d_ncw = T.match_buffer(var_conv1d_ncw, (n, f, w + T.int64(1) - kw))
             # with T.sblock("root"):
-            pad_temp = T.alloc_buffer((n, c, w))
+            pad_temp = T.sblock_alloc_buffer((n, c, w))
             for i0, i1, i2 in T.grid(n, c, w):
                 with T.sblock("pad_temp"):
                     v_i0, v_i1, v_i2 = T.axis.remap("SSS", [i0, i1, i2])
@@ -218,10 +218,10 @@ def test_conv1d_transpose():
     class Expected:
         @T.prim_func(private=True)
         def conv1d_transpose(x: T.Buffer((T.int64(2), T.int64(128), T.int64(28)), "float32"), w: T.Buffer((T.int64(128), T.int64(16), T.int64(3)), "float32"), compute: T.Buffer((T.int64(2), T.int64(128), T.int64(56)), "float32")):
-            T.func_attr({"tir.noalias": True})
-            data_dilate = T.alloc_buffer((T.int64(2), T.int64(128), T.int64(55)))
-            data_pad = T.alloc_buffer((T.int64(2), T.int64(128), T.int64(58)))
-            kernel = T.alloc_buffer((T.int64(16), T.int64(128), T.int64(3)))
+            T.func_attr({"tirx.noalias": True})
+            data_dilate = T.sblock_alloc_buffer((T.int64(2), T.int64(128), T.int64(55)))
+            data_pad = T.sblock_alloc_buffer((T.int64(2), T.int64(128), T.int64(58)))
+            kernel = T.sblock_alloc_buffer((T.int64(16), T.int64(128), T.int64(3)))
             for i0, i1, i2 in T.grid(T.int64(2), T.int64(128), T.int64(55)):
                 with T.sblock("data_dilate"):
                     v_i0, v_i1, v_i2 = T.axis.remap("SSS", [i0, i1, i2])
@@ -270,8 +270,8 @@ def test_conv2d():
 
         @T.prim_func(private=True)
         def conv2d(rxplaceholder: T.Buffer((T.int64(2), T.int64(128), T.int64(28), T.int64(28)), "float32"), rxplaceholder_1: T.Buffer((T.int64(64), T.int64(16), T.int64(3), T.int64(3)), "float32"), group_conv2d_nchw: T.Buffer((T.int64(2), T.int64(64), T.int64(13), T.int64(13)), "float32")):
-            T.func_attr({"tir.noalias": True})
-            pad_temp = T.alloc_buffer([T.int64(2), T.int64(128), T.int64(30), T.int64(30)], dtype="float32")
+            T.func_attr({"tirx.noalias": True})
+            pad_temp = T.sblock_alloc_buffer([T.int64(2), T.int64(128), T.int64(30), T.int64(30)], dtype="float32")
             for i0, i1, i2, i3 in T.grid(T.int64(2), T.int64(128), T.int64(30), T.int64(30)):
                 with T.sblock("pad_temp"):
                     i0_1, i1_1, i2_1, i3_1 = T.axis.remap("SSSS", [i0, i1, i2, i3])
@@ -310,8 +310,8 @@ def test_conv2d_with_out_dtype():
 
         @T.prim_func(private=True)
         def conv2d(rxplaceholder: T.Buffer((T.int64(2), T.int64(3), T.int64(28), T.int64(28)), "float32"), rxplaceholder_1: T.Buffer((T.int64(4), T.int64(3), T.int64(3), T.int64(3)), "float32"), conv2d_nchw: T.Buffer((T.int64(2), T.int64(4), T.int64(26), T.int64(26)), "float16")):
-            T.func_attr({"tir.noalias": True})
-            pad_temp = T.alloc_buffer([T.int64(2), T.int64(3), T.int64(28), T.int64(28)], dtype="float32")
+            T.func_attr({"tirx.noalias": True})
+            pad_temp = T.sblock_alloc_buffer([T.int64(2), T.int64(3), T.int64(28), T.int64(28)], dtype="float32")
             for i0, i1, i2, i3 in T.grid(T.int64(2), T.int64(3), T.int64(28), T.int64(28)):
                 with T.sblock("pad_temp"):
                     i0_1, i1_1, i2_1, i3_1 = T.axis.remap("SSSS", [i0, i1, i2, i3])
@@ -350,8 +350,8 @@ def test_conv2d_nhwc():
 
         @T.prim_func(private=True)
         def conv2d(rxplaceholder: T.Buffer((T.int64(2), T.int64(28), T.int64(28), T.int64(128)), "float32"), rxplaceholder_1: T.Buffer((T.int64(64), T.int64(128), T.int64(3), T.int64(3)), "float32"), conv2d_nhwc: T.Buffer((T.int64(2), T.int64(26), T.int64(26), T.int64(64)), "float32")):
-            T.func_attr({"tir.noalias": True})
-            pad_temp = T.alloc_buffer([T.int64(2), T.int64(28), T.int64(28), T.int64(128)], dtype="float32")
+            T.func_attr({"tirx.noalias": True})
+            pad_temp = T.sblock_alloc_buffer([T.int64(2), T.int64(28), T.int64(28), T.int64(128)], dtype="float32")
             for i0, i1, i2, i3 in T.grid(T.int64(2), T.int64(28), T.int64(28), T.int64(128)):
                 with T.sblock("pad_temp"):
                     i0_1, i1_1, i2_1, i3_1 = T.axis.remap("SSSS", [i0, i1, i2, i3])
@@ -402,7 +402,7 @@ def test_conv2d_symbolic():
 
         @T.prim_func(private=True)
         def conv2d(var_rxplaceholder: T.handle, var_rxplaceholder_1: T.handle, var_conv2d_nchw: T.handle):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             c = T.int64()
             f = T.int64()
             h = T.int64()
@@ -413,7 +413,7 @@ def test_conv2d_symbolic():
             rxplaceholder = T.match_buffer(var_rxplaceholder, [n, c, h, w], dtype="float32")
             rxplaceholder_1 = T.match_buffer(var_rxplaceholder_1, [f, c, kh, kw], dtype="float32")
             conv2d_nchw = T.match_buffer(var_conv2d_nchw, [n, f, h + T.int64(1) - kh, w + T.int64(1) - kw], dtype="float32")
-            pad_temp = T.alloc_buffer([n, c, h, w], dtype="float32")
+            pad_temp = T.sblock_alloc_buffer([n, c, h, w], dtype="float32")
             for i0, i1, i2, i3 in T.grid(n, c, h, w):
                 with T.sblock("pad_temp"):
                     i0_1, i1_1, i2_1, i3_1 = T.axis.remap("SSSS", [i0, i1, i2, i3])
@@ -452,11 +452,11 @@ def test_conv2d_transpose():
 
         @T.prim_func(private=True)
         def conv2d_transpose(rxplaceholder: T.Buffer((T.int64(2), T.int64(128), T.int64(28), T.int64(28)), "float32"), rxplaceholder_1: T.Buffer((T.int64(128), T.int64(16), T.int64(3), T.int64(3)), "float32"), compute: T.Buffer((T.int64(2), T.int64(128), T.int64(56), T.int64(84)), "float32")):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             # with T.sblock("root"):
-            data_dilate = T.alloc_buffer((T.int64(2), T.int64(128), T.int64(55), T.int64(82)))
-            data_pad = T.alloc_buffer((T.int64(2), T.int64(128), T.int64(58), T.int64(86)))
-            kernel_transform = T.alloc_buffer((T.int64(16), T.int64(128), T.int64(3), T.int64(3)))
+            data_dilate = T.sblock_alloc_buffer((T.int64(2), T.int64(128), T.int64(55), T.int64(82)))
+            data_pad = T.sblock_alloc_buffer((T.int64(2), T.int64(128), T.int64(58), T.int64(86)))
+            kernel_transform = T.sblock_alloc_buffer((T.int64(16), T.int64(128), T.int64(3), T.int64(3)))
             for i0, i1, i2, i3 in T.grid(T.int64(2), T.int64(128), T.int64(55), T.int64(82)):
                 with T.sblock("data_dilate"):
                     v_i0, v_i1, v_i2, v_i3 = T.axis.remap("SSSS", [i0, i1, i2, i3])
@@ -507,11 +507,11 @@ def test_conv2d_transpose_with_out_dtype():
 
         @T.prim_func(private=True)
         def conv2d_transpose(rxplaceholder: T.Buffer((T.int64(2), T.int64(3), T.int64(28), T.int64(28)), "float32"), rxplaceholder_1: T.Buffer((T.int64(3), T.int64(4), T.int64(3), T.int64(3)), "float32"), compute: T.Buffer((T.int64(2), T.int64(4), T.int64(30), T.int64(30)), "float16")):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             # with T.sblock("root"):
-            data_dilate = T.alloc_buffer((T.int64(2), T.int64(3), T.int64(28), T.int64(28)))
-            data_pad = T.alloc_buffer((T.int64(2), T.int64(3), T.int64(32), T.int64(32)))
-            kernel_transform = T.alloc_buffer((T.int64(4), T.int64(3), T.int64(3), T.int64(3)))
+            data_dilate = T.sblock_alloc_buffer((T.int64(2), T.int64(3), T.int64(28), T.int64(28)))
+            data_pad = T.sblock_alloc_buffer((T.int64(2), T.int64(3), T.int64(32), T.int64(32)))
+            kernel_transform = T.sblock_alloc_buffer((T.int64(4), T.int64(3), T.int64(3), T.int64(3)))
             for i0, i1, i2, i3 in T.grid(T.int64(2), T.int64(3), T.int64(28), T.int64(28)):
                 with T.sblock("data_dilate"):
                     v_i0, v_i1, v_i2, v_i3 = T.axis.remap("SSSS", [i0, i1, i2, i3])
@@ -569,7 +569,7 @@ def test_conv2d_transpose_symbolic():
 
         @T.prim_func(private=True)
         def conv2d_transpose(var_rxplaceholder: T.handle, var_rxplaceholder_1: T.handle, var_compute: T.handle):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             n = T.int64()
             c = T.int64()
             h = T.int64()
@@ -581,9 +581,9 @@ def test_conv2d_transpose_symbolic():
             rxplaceholder_1 = T.match_buffer(var_rxplaceholder_1, (f, c, kh, kw))
             compute = T.match_buffer(var_compute, (n, c, h * T.int64(3) + kh - T.int64(3), w * T.int64(3) + kw - T.int64(3)))
             # with T.sblock("root"):
-            data_dilate = T.alloc_buffer((n, c, h * T.int64(3) - T.int64(2), w * T.int64(3) - T.int64(2)))
-            data_pad = T.alloc_buffer((n, c, h * T.int64(3) + kh * T.int64(2) - T.int64(4), w * T.int64(3) + kw * T.int64(2) - T.int64(4)))
-            kernel_transform = T.alloc_buffer((c, c, kh, kw))
+            data_dilate = T.sblock_alloc_buffer((n, c, h * T.int64(3) - T.int64(2), w * T.int64(3) - T.int64(2)))
+            data_pad = T.sblock_alloc_buffer((n, c, h * T.int64(3) + kh * T.int64(2) - T.int64(4), w * T.int64(3) + kw * T.int64(2) - T.int64(4)))
+            kernel_transform = T.sblock_alloc_buffer((c, c, kh, kw))
             for i0, i1, i2, i3 in T.grid(n, c, h * T.int64(3) - T.int64(2), w * T.int64(3) - T.int64(2)):
                 with T.sblock("data_dilate"):
                     v_i0, v_i1, v_i2, v_i3 = T.axis.remap("SSSS", [i0, i1, i2, i3])
@@ -634,8 +634,8 @@ def test_max_pool2d():
 
         @T.prim_func(private=True)
         def max_pool2d(rxplaceholder: T.Buffer((T.int64(4), T.int64(112), T.int64(112), T.int64(6)), "float32"), pool_max: T.Buffer((T.int64(4), T.int64(56), T.int64(56), T.int64(6)), "float32")):
-            T.func_attr({"tir.noalias": True})
-            pad_temp = T.alloc_buffer([T.int64(4), T.int64(114), T.int64(114), T.int64(6)], dtype="float32")
+            T.func_attr({"tirx.noalias": True})
+            pad_temp = T.sblock_alloc_buffer([T.int64(4), T.int64(114), T.int64(114), T.int64(6)], dtype="float32")
             for i0, i1, i2, i3 in T.grid(T.int64(4), T.int64(114), T.int64(114), T.int64(6)):
                 with T.sblock("pad_temp"):
                     ax0, ax1, ax2, ax3 = T.axis.remap("SSSS", [i0, i1, i2, i3])
@@ -675,7 +675,7 @@ def test_max_pool2d_NCHW16c():
 
         @T.prim_func(private=True)
         def max_pool2d(rxplaceholder: T.Buffer((T.int64(4), T.int64(4), T.int64(112), T.int64(112), T.int64(16)), "float32"), pool_max: T.Buffer((T.int64(4), T.int64(4), T.int64(110), T.int64(110), T.int64(16)), "float32")):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             for i0, i1, i2, i3, i4, i5, i6 in T.grid(T.int64(4), T.int64(4), T.int64(110), T.int64(110), T.int64(16), T.int64(3), T.int64(3)):
                 with T.sblock("pool_max"):
                     ax0, ax1, ax2, ax3, ax4, rv0, rv1 = T.axis.remap("SSSSSRR", [i0, i1, i2, i3, i4, i5, i6])
@@ -709,8 +709,8 @@ def test_max_pool2d_ceil_mode():
 
         @T.prim_func(private=True)
         def max_pool2d(rxplaceholder: T.Buffer((T.int64(4), T.int64(6), T.int64(112), T.int64(112)), "float32"), pool_max: T.Buffer((T.int64(4), T.int64(6), T.int64(38), T.int64(38)), "float32")):
-            T.func_attr({"tir.noalias": True})
-            pad_temp = T.alloc_buffer([T.int64(4), T.int64(6), T.int64(116), T.int64(116)], dtype="float32")
+            T.func_attr({"tirx.noalias": True})
+            pad_temp = T.sblock_alloc_buffer([T.int64(4), T.int64(6), T.int64(116), T.int64(116)], dtype="float32")
             for i0, i1, i2, i3 in T.grid(T.int64(4), T.int64(6), T.int64(116), T.int64(116)):
                 with T.sblock("pad_temp"):
                     ax0, ax1, ax2, ax3 = T.axis.remap("SSSS", [i0, i1, i2, i3])
@@ -767,10 +767,10 @@ def test_avg_pool2d():
     class Expected:
         @T.prim_func(private=True)
         def avg_pool2d(rxplaceholder: T.Buffer((T.int64(4), T.int64(112), T.int64(112), T.int64(6)), "float32"), pool_avg: T.Buffer((T.int64(4), T.int64(56), T.int64(56), T.int64(6)), "float32")):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             # with T.sblock("root"):
-            pad_temp = T.alloc_buffer((T.int64(4), T.int64(114), T.int64(114), T.int64(6)))
-            pool_sum = T.alloc_buffer((T.int64(4), T.int64(56), T.int64(56), T.int64(6)))
+            pad_temp = T.sblock_alloc_buffer((T.int64(4), T.int64(114), T.int64(114), T.int64(6)))
+            pool_sum = T.sblock_alloc_buffer((T.int64(4), T.int64(56), T.int64(56), T.int64(6)))
             for ax0, ax1, ax2, ax3 in T.grid(T.int64(4), T.int64(114), T.int64(114), T.int64(6)):
                 with T.sblock("pad_temp"):
                     v_ax0, v_ax1, v_ax2, v_ax3 = T.axis.remap("SSSS", [ax0, ax1, ax2, ax3])
@@ -816,9 +816,9 @@ def test_avg_pool2d_NCHW16c():
     class Expected:
         @T.prim_func(private=True)
         def avg_pool2d(rxplaceholder: T.Buffer((T.int64(4), T.int64(4), T.int64(112), T.int64(112), T.int64(16)), "float32"), pool_avg: T.Buffer((T.int64(4), T.int64(4), T.int64(110), T.int64(110), T.int64(16)), "float32")):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             # with T.sblock("root"):
-            pool_sum = T.alloc_buffer((T.int64(4), T.int64(4), T.int64(110), T.int64(110), T.int64(16)))
+            pool_sum = T.sblock_alloc_buffer((T.int64(4), T.int64(4), T.int64(110), T.int64(110), T.int64(16)))
             for ax0, ax1, ax2, ax3, ax4, rv0, rv1 in T.grid(T.int64(4), T.int64(4), T.int64(110), T.int64(110), T.int64(16), T.int64(3), T.int64(3)):
                 with T.sblock("pool_sum"):
                     v_ax0, v_ax1, v_ax2, v_ax3, v_ax4, v_rv0, v_rv1 = T.axis.remap("SSSSSRR", [ax0, ax1, ax2, ax3, ax4, rv0, rv1])
@@ -857,10 +857,10 @@ def test_avg_pool2d_ceil_mode():
     class Expected:
         @T.prim_func(private=True)
         def avg_pool2d(rxplaceholder: T.Buffer((T.int64(4), T.int64(6), T.int64(112), T.int64(112)), "float32"), pool_avg: T.Buffer((T.int64(4), T.int64(6), T.int64(38), T.int64(38)), "float32")):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             # with T.sblock("root"):
-            pad_temp = T.alloc_buffer((T.int64(4), T.int64(6), T.int64(116), T.int64(116)))
-            pool_sum = T.alloc_buffer((T.int64(4), T.int64(6), T.int64(38), T.int64(38)))
+            pad_temp = T.sblock_alloc_buffer((T.int64(4), T.int64(6), T.int64(116), T.int64(116)))
+            pool_sum = T.sblock_alloc_buffer((T.int64(4), T.int64(6), T.int64(38), T.int64(38)))
             for ax0, ax1, ax2, ax3 in T.grid(T.int64(4), T.int64(6), T.int64(116), T.int64(116)):
                 with T.sblock("pad_temp"):
                     v_ax0, v_ax1, v_ax2, v_ax3 = T.axis.remap("SSSS", [ax0, ax1, ax2, ax3])
@@ -934,8 +934,8 @@ def test_adaptive_avg_pool2d():
 
         @T.prim_func(private=True)
         def adaptive_avg_pool2d(rxplaceholder: T.Buffer((T.int64(2), T.int64(4), T.int64(7), T.int64(7), T.int64(16)), "float32"), adaptive_pool_avg: T.Buffer((T.int64(2), T.int64(4), T.int64(1), T.int64(1), T.int64(16)), "float32")):
-            T.func_attr({"tir.noalias": True})
-            adaptive_pool_sum = T.alloc_buffer([T.int64(2), T.int64(4), T.int64(1), T.int64(1), T.int64(16)], dtype="float32")
+            T.func_attr({"tirx.noalias": True})
+            adaptive_pool_sum = T.sblock_alloc_buffer([T.int64(2), T.int64(4), T.int64(1), T.int64(1), T.int64(16)], dtype="float32")
             for i0, i1, i2, i3, i4, i5, i6 in T.grid(T.int64(2), T.int64(4), T.int64(1), T.int64(1), T.int64(16), T.int64(7), T.int64(7)):
                 with T.sblock("adaptive_pool_sum"):
                     ax0, ax1, ax2, ax3, ax4, rv0, rv1 = T.axis.remap("SSSSSRR", [i0, i1, i2, i3, i4, i5, i6])
@@ -975,8 +975,8 @@ def test_adaptive_avg_pool2d_without_output_size():
 
         @T.prim_func(private=True)
         def adaptive_avg_pool2d(rxplaceholder: T.Buffer((T.int64(2), T.int64(16), T.int64(7), T.int64(7)), "float32"), adaptive_pool_avg: T.Buffer((T.int64(2), T.int64(16), T.int64(7), T.int64(7)), "float32")):
-            T.func_attr({"tir.noalias": True})
-            adaptive_pool_sum = T.alloc_buffer([T.int64(2), T.int64(16), T.int64(7), T.int64(7)], dtype="float32")
+            T.func_attr({"tirx.noalias": True})
+            adaptive_pool_sum = T.sblock_alloc_buffer([T.int64(2), T.int64(16), T.int64(7), T.int64(7)], dtype="float32")
             for i0, i1, i2, i3, i4, i5 in T.grid(T.int64(2), T.int64(16), T.int64(7), T.int64(7), T.int64(1), T.int64(1)):
                 with T.sblock("adaptive_pool_sum"):
                     ax0, ax1, ax2, ax3, rv0, rv1 = T.axis.remap("SSSSRR", [i0, i1, i2, i3, i4, i5])
@@ -1035,7 +1035,7 @@ def test_relu():
 
         @T.prim_func(private=True)
         def relu(rxplaceholder: T.Buffer((T.int64(2), T.int64(3)), "float32"), compute: T.Buffer((T.int64(2), T.int64(3)), "float32")):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             for i0, i1 in T.grid(T.int64(2), T.int64(3)):
                 with T.sblock("compute"):
                     i0_1, i1_1 = T.axis.remap("SS", [i0, i1])
@@ -1070,7 +1070,7 @@ def test_relu_symbolic():
 
         @T.prim_func(private=True)
         def relu(var_rxplaceholder: T.handle, var_compute: T.handle):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             m = T.int64()
             n = T.int64()
             rxplaceholder = T.match_buffer(var_rxplaceholder, [m, n], dtype="float32")
@@ -1106,7 +1106,7 @@ def test_leakyrelu():
 
         @T.prim_func(private=True)
         def leaky_relu(x: T.Buffer((T.int64(2), T.int64(3)), "float32"), compute: T.Buffer((T.int64(2), T.int64(3)), "float32")):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             for i0, i1 in T.grid(T.int64(2), T.int64(3)):
                 with T.sblock("compute"):
                     v_i0, v_i1 = T.axis.remap("SS", [i0, i1])
@@ -1141,7 +1141,7 @@ def test_leakyrelu_symbolic():
 
         @T.prim_func(private=True)
         def leaky_relu(var_x: T.handle, var_compute: T.handle):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             m, n = T.int64(), T.int64()
             x = T.match_buffer(var_x, (m, n))
             compute = T.match_buffer(var_compute, (m, n))
@@ -1175,9 +1175,9 @@ def test_prelu():
 
         @T.prim_func(private=True)
         def prelu(x: T.Buffer((T.int64(2), T.int64(3)), "float32"), y: T.Buffer((T.int64(1),), "float32"), compute: T.Buffer((T.int64(2), T.int64(3)), "float32")):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             # with T.sblock("root"):
-            slope_broadcasted = T.alloc_buffer((T.int64(3),))
+            slope_broadcasted = T.sblock_alloc_buffer((T.int64(3),))
             for c in range(T.int64(3)):
                 with T.sblock("slope_broadcasted"):
                     v_c = T.axis.spatial(T.int64(3), c)
@@ -1216,12 +1216,12 @@ def test_prelu_symbolic():
 
         @T.prim_func(private=True)
         def prelu(var_x: T.handle, y: T.Buffer((T.int64(1),), "float32"), var_compute: T.handle):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             m = T.int64()
             x = T.match_buffer(var_x, (m, T.int64(7)))
             compute = T.match_buffer(var_compute, (m, T.int64(7)))
             # with T.sblock("root"):
-            slope_broadcasted = T.alloc_buffer((T.int64(7),))
+            slope_broadcasted = T.sblock_alloc_buffer((T.int64(7),))
             for c in range(T.int64(7)):
                 with T.sblock("slope_broadcasted"):
                     v_c = T.axis.spatial(T.int64(7), c)
@@ -1258,11 +1258,11 @@ def test_gelu():
 
         @T.prim_func(private=True)
         def gelu(x: T.Buffer((T.int64(2), T.int64(3)), "float32"), T_multiply: T.Buffer((T.int64(2), T.int64(3)), "float32")):
-            T.func_attr({"tir.noalias": True})
-            T_multiply_1 = T.alloc_buffer((T.int64(2), T.int64(3)))
-            compute = T.alloc_buffer((T.int64(2), T.int64(3)))
-            T_multiply_2 = T.alloc_buffer((T.int64(2), T.int64(3)))
-            T_add = T.alloc_buffer((T.int64(2), T.int64(3)))
+            T.func_attr({"tirx.noalias": True})
+            T_multiply_1 = T.sblock_alloc_buffer((T.int64(2), T.int64(3)))
+            compute = T.sblock_alloc_buffer((T.int64(2), T.int64(3)))
+            T_multiply_2 = T.sblock_alloc_buffer((T.int64(2), T.int64(3)))
+            T_add = T.sblock_alloc_buffer((T.int64(2), T.int64(3)))
             for ax0, ax1 in T.grid(T.int64(2), T.int64(3)):
                 with T.sblock("T_multiply"):
                     v_ax0, v_ax1 = T.axis.remap("SS", [ax0, ax1])
@@ -1321,14 +1321,14 @@ def test_gelu_symbolic():
 
         @T.prim_func(private=True)
         def gelu(var_x: T.handle, var_T_multiply: T.handle):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             m, n = T.int64(), T.int64()
             x = T.match_buffer(var_x, (m, n))
             T_multiply = T.match_buffer(var_T_multiply, (m, n))
-            T_multiply_1 = T.alloc_buffer((m, n))
-            compute = T.alloc_buffer((m, n))
-            T_multiply_2 = T.alloc_buffer((m, n))
-            T_add = T.alloc_buffer((m, n))
+            T_multiply_1 = T.sblock_alloc_buffer((m, n))
+            compute = T.sblock_alloc_buffer((m, n))
+            T_multiply_2 = T.sblock_alloc_buffer((m, n))
+            T_add = T.sblock_alloc_buffer((m, n))
             for ax0, ax1 in T.grid(m, n):
                 with T.sblock("T_multiply"):
                     v_ax0, v_ax1 = T.axis.remap("SS", [ax0, ax1])
@@ -1383,15 +1383,15 @@ def test_gelu_tanh():
 
         @T.prim_func(private=True)
         def gelu_tanh(A: T.Buffer((T.int64(2), T.int64(3)), "float32"), T_multiply: T.Buffer((T.int64(2), T.int64(3)), "float32")):
-            T.func_attr({"tir.noalias": True})
-            T_multiply_1 = T.alloc_buffer((T.int64(2), T.int64(3)))
-            T_multiply_2 = T.alloc_buffer((T.int64(2), T.int64(3)))
-            T_multiply_3 = T.alloc_buffer((T.int64(2), T.int64(3)))
-            T_multiply_4 = T.alloc_buffer((T.int64(2), T.int64(3)))
-            T_add = T.alloc_buffer((T.int64(2), T.int64(3)))
-            T_multiply_5 = T.alloc_buffer((T.int64(2), T.int64(3)))
-            compute = T.alloc_buffer((T.int64(2), T.int64(3)))
-            T_add_1 = T.alloc_buffer((T.int64(2), T.int64(3)))
+            T.func_attr({"tirx.noalias": True})
+            T_multiply_1 = T.sblock_alloc_buffer((T.int64(2), T.int64(3)))
+            T_multiply_2 = T.sblock_alloc_buffer((T.int64(2), T.int64(3)))
+            T_multiply_3 = T.sblock_alloc_buffer((T.int64(2), T.int64(3)))
+            T_multiply_4 = T.sblock_alloc_buffer((T.int64(2), T.int64(3)))
+            T_add = T.sblock_alloc_buffer((T.int64(2), T.int64(3)))
+            T_multiply_5 = T.sblock_alloc_buffer((T.int64(2), T.int64(3)))
+            compute = T.sblock_alloc_buffer((T.int64(2), T.int64(3)))
+            T_add_1 = T.sblock_alloc_buffer((T.int64(2), T.int64(3)))
             for ax0, ax1 in T.grid(T.int64(2), T.int64(3)):
                 with T.sblock("T_multiply"):
                     v_ax0, v_ax1 = T.axis.remap("SS", [ax0, ax1])
@@ -1473,19 +1473,19 @@ def test_gelu_tanh_symbolic():
 
         @T.prim_func(private=True)
         def gelu_tanh(var_A: T.handle, var_T_multiply: T.handle):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             m, n = T.int64(), T.int64()
             A = T.match_buffer(var_A, (m, n))
             T_multiply = T.match_buffer(var_T_multiply, (m, n))
             # with T.sblock("root"):
-            T_multiply_1 = T.alloc_buffer((m, n))
-            T_multiply_2 = T.alloc_buffer((m, n))
-            T_multiply_3 = T.alloc_buffer((m, n))
-            T_multiply_4 = T.alloc_buffer((m, n))
-            T_add = T.alloc_buffer((m, n))
-            T_multiply_5 = T.alloc_buffer((m, n))
-            compute = T.alloc_buffer((m, n))
-            T_add_1 = T.alloc_buffer((m, n))
+            T_multiply_1 = T.sblock_alloc_buffer((m, n))
+            T_multiply_2 = T.sblock_alloc_buffer((m, n))
+            T_multiply_3 = T.sblock_alloc_buffer((m, n))
+            T_multiply_4 = T.sblock_alloc_buffer((m, n))
+            T_add = T.sblock_alloc_buffer((m, n))
+            T_multiply_5 = T.sblock_alloc_buffer((m, n))
+            compute = T.sblock_alloc_buffer((m, n))
+            T_add_1 = T.sblock_alloc_buffer((m, n))
             for ax0, ax1 in T.grid(m, n):
                 with T.sblock("T_multiply"):
                     v_ax0, v_ax1 = T.axis.remap("SS", [ax0, ax1])
@@ -1564,8 +1564,8 @@ def test_silu():
 
         @T.prim_func(private=True)
         def silu(rxplaceholder: T.Buffer((T.int64(2), T.int64(3)), "float32"), T_multiply: T.Buffer((T.int64(2), T.int64(3)), "float32")):
-            T.func_attr({"tir.noalias": True})
-            compute = T.alloc_buffer([T.int64(2), T.int64(3)], dtype="float32")
+            T.func_attr({"tirx.noalias": True})
+            compute = T.sblock_alloc_buffer([T.int64(2), T.int64(3)], dtype="float32")
             for i0, i1 in T.grid(T.int64(2), T.int64(3)):
                 with T.sblock("compute"):
                     i0_1, i1_1 = T.axis.remap("SS", [i0, i1])
@@ -1606,12 +1606,12 @@ def test_silu_symbolic():
 
         @T.prim_func(private=True)
         def silu(var_rxplaceholder: T.handle, var_T_multiply: T.handle):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             m = T.int64()
             n = T.int64()
             rxplaceholder = T.match_buffer(var_rxplaceholder, [m, n], dtype="float32")
             T_multiply = T.match_buffer(var_T_multiply, [m, n], dtype="float32")
-            compute = T.alloc_buffer([m, n], dtype="float32")
+            compute = T.sblock_alloc_buffer([m, n], dtype="float32")
             for i0, i1 in T.grid(m, n):
                 with T.sblock("compute"):
                     i0_1, i1_1 = T.axis.remap("SS", [i0, i1])
@@ -1648,10 +1648,10 @@ def test_softmax():
 
         @T.prim_func(private=True)
         def softmax(rxplaceholder: T.Buffer((T.int64(2), T.int64(3), T.int64(16), T.int64(32)), "float32"), T_softmax_norm: T.Buffer((T.int64(2), T.int64(3), T.int64(16), T.int64(32)), "float32")):
-            T.func_attr({"tir.noalias": True})
-            T_softmax_maxelem = T.alloc_buffer([T.int64(2), T.int64(3), T.int64(32)], dtype="float32")
-            T_softmax_exp = T.alloc_buffer([T.int64(2), T.int64(3), T.int64(16), T.int64(32)], dtype="float32")
-            T_softmax_expsum = T.alloc_buffer([T.int64(2), T.int64(3), T.int64(32)], dtype="float32")
+            T.func_attr({"tirx.noalias": True})
+            T_softmax_maxelem = T.sblock_alloc_buffer([T.int64(2), T.int64(3), T.int64(32)], dtype="float32")
+            T_softmax_exp = T.sblock_alloc_buffer([T.int64(2), T.int64(3), T.int64(16), T.int64(32)], dtype="float32")
+            T_softmax_expsum = T.sblock_alloc_buffer([T.int64(2), T.int64(3), T.int64(32)], dtype="float32")
             for i0, i1, i2, i3 in T.grid(T.int64(2), T.int64(3), T.int64(32), T.int64(16)):
                 with T.sblock("T_softmax_maxelem"):
                     i0_1, i1_1, i2_1, k = T.axis.remap("SSSR", [i0, i1, i2, i3])
@@ -1711,15 +1711,15 @@ def test_softmax_symbolic():
 
         @T.prim_func(private=True)
         def softmax(var_rxplaceholder: T.handle, var_T_softmax_norm: T.handle):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             a = T.int64()
             b = T.int64()
             c = T.int64()
             rxplaceholder = T.match_buffer(var_rxplaceholder, [a, b, c], dtype="float32")
             T_softmax_norm = T.match_buffer(var_T_softmax_norm, [a, b, c], dtype="float32")
-            T_softmax_maxelem = T.alloc_buffer([a, b], dtype="float32")
-            T_softmax_exp = T.alloc_buffer([a, b, c], dtype="float32")
-            T_softmax_expsum = T.alloc_buffer([a, b], dtype="float32")
+            T_softmax_maxelem = T.sblock_alloc_buffer([a, b], dtype="float32")
+            T_softmax_exp = T.sblock_alloc_buffer([a, b, c], dtype="float32")
+            T_softmax_expsum = T.sblock_alloc_buffer([a, b], dtype="float32")
             for i0, i1, i2 in T.grid(a, b, c):
                 with T.sblock("T_softmax_maxelem"):
                     i0_1, i1_1, k = T.axis.remap("SSR", [i0, i1, i2])
@@ -1773,9 +1773,9 @@ def test_log_softmax():
 
         @T.prim_func(private=True)
         def log_softmax(rxplaceholder: T.Buffer((T.int64(2), T.int64(3), T.int64(16), T.int64(32)), "float32"), compute: T.Buffer((T.int64(2), T.int64(3), T.int64(16), T.int64(32)), "float32"),):
-            T.func_attr({"tir.noalias": True})
-            T_softmax_maxelem = T.alloc_buffer([T.int64(2), T.int64(3), T.int64(32)], dtype="float32")
-            compute_1 = T.alloc_buffer([T.int64(2), T.int64(3), T.int64(32)], dtype="float32")
+            T.func_attr({"tirx.noalias": True})
+            T_softmax_maxelem = T.sblock_alloc_buffer([T.int64(2), T.int64(3), T.int64(32)], dtype="float32")
+            compute_1 = T.sblock_alloc_buffer([T.int64(2), T.int64(3), T.int64(32)], dtype="float32")
             for i0, i1, i2, i3 in T.grid(T.int64(2), T.int64(3), T.int64(32), T.int64(16)):
                 with T.sblock("T_softmax_maxelem"):
                     i0_1, i1_1, i2_1, k = T.axis.remap("SSSR", [i0, i1, i2, i3])
@@ -1830,14 +1830,14 @@ def test_log_softmax_symbolic():
 
         @T.prim_func(private=True)
         def log_softmax(var_rxplaceholder: T.handle, var_compute: T.handle):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             a = T.int64()
             b = T.int64()
             c = T.int64()
             rxplaceholder = T.match_buffer(var_rxplaceholder, [a, b, c], dtype="float32")
             compute = T.match_buffer(var_compute, [a, b, c], dtype="float32")
-            T_softmax_maxelem = T.alloc_buffer([a, b], dtype="float32")
-            compute_1 = T.alloc_buffer([a, b], dtype="float32")
+            T_softmax_maxelem = T.sblock_alloc_buffer([a, b], dtype="float32")
+            compute_1 = T.sblock_alloc_buffer([a, b], dtype="float32")
             for i0, i1, k in T.grid(a, b, c):
                 with T.sblock("T_softmax_maxelem"):
                     v_i0, v_i1, v_k = T.axis.remap("SSR", [i0, i1, k])
@@ -1885,9 +1885,9 @@ def test_cross_entropy_with_logits():
 
         @T.prim_func(private=True)
         def cross_entropy_with_logits(x: T.Buffer((T.int64(3),), "float32"), y: T.Buffer((T.int64(3),), "float32"), T_multiply: T.Buffer((), "float32")):
-            T.func_attr({"tir.noalias": True})
-            T_multiply_1 = T.alloc_buffer((T.int64(3),))
-            T_multiply_red = T.alloc_buffer(())
+            T.func_attr({"tirx.noalias": True})
+            T_multiply_1 = T.sblock_alloc_buffer((T.int64(3),))
+            T_multiply_red = T.sblock_alloc_buffer(())
             for ax0 in range(T.int64(3)):
                 with T.sblock("T_multiply"):
                     v_ax0 = T.axis.spatial(T.int64(3), ax0)
@@ -1931,10 +1931,10 @@ def test_cross_entropy_with_logits_batch():
 
         @T.prim_func(private=True)
         def cross_entropy_with_logits(x: T.Buffer((T.int64(2), T.int64(3)), "float32"), y: T.Buffer((T.int64(2), T.int64(3)), "float32"), T_divide: T.Buffer((), "float32")):
-            T.func_attr({"tir.noalias": True})
-            T_multiply = T.alloc_buffer((T.int64(2), T.int64(3)))
-            T_multiply_red = T.alloc_buffer(())
-            T_multiply_1 = T.alloc_buffer(())
+            T.func_attr({"tirx.noalias": True})
+            T_multiply = T.sblock_alloc_buffer((T.int64(2), T.int64(3)))
+            T_multiply_red = T.sblock_alloc_buffer(())
+            T_multiply_1 = T.sblock_alloc_buffer(())
             for ax0, ax1 in T.grid(T.int64(2), T.int64(3)):
                 with T.sblock("T_multiply"):
                     v_ax0, v_ax1 = T.axis.remap("SS", [ax0, ax1])
@@ -1985,13 +1985,13 @@ def test_cross_entropy_with_logits_batch_symbolic():
 
         @T.prim_func(private=True)
         def cross_entropy_with_logits(var_x: T.handle, var_y: T.handle, T_divide: T.Buffer((), "float32")):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             m, n = T.int64(), T.int64()
             x = T.match_buffer(var_x, (n, m))
             y = T.match_buffer(var_y, (n, m))
-            T_multiply = T.alloc_buffer((n, m))
-            T_multiply_red = T.alloc_buffer(())
-            T_multiply_1 = T.alloc_buffer(())
+            T_multiply = T.sblock_alloc_buffer((n, m))
+            T_multiply_red = T.sblock_alloc_buffer(())
+            T_multiply_1 = T.sblock_alloc_buffer(())
             for ax0, ax1 in T.grid(n, m):
                 with T.sblock("T_multiply"):
                     v_ax0, v_ax1 = T.axis.remap("SS", [ax0, ax1])
@@ -2035,7 +2035,7 @@ def test_batch_norm():
     class Expected:
         @T.prim_func(private=True)
         def batch_norm(var_x: T.handle, var_gamma: T.handle, var_beta: T.handle, var_moving_mean: T.handle, var_moving_var: T.handle, var_T_add: T.handle, var_T_add_1: T.handle, var_T_add_2: T.handle):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             x = T.match_buffer(var_x, (T.int64(2), T.int64(3), T.int64(28), T.int64(28)))
             gamma = T.match_buffer(var_gamma, (T.int64(3),))
             beta = T.match_buffer(var_beta, (T.int64(3),))
@@ -2047,26 +2047,26 @@ def test_batch_norm():
             with T.sblock("root"):
                 T.reads()
                 T.writes()
-                x_red = T.alloc_buffer((T.int64(3),))
-                T_divide = T.alloc_buffer((T.int64(3),))
-                T_reshape = T.alloc_buffer((T.int64(1), T.int64(3), T.int64(1), T.int64(1)))
-                T_subtract = T.alloc_buffer((T.int64(2), T.int64(3), T.int64(28), T.int64(28)))
-                T_subtract_1 = T.alloc_buffer((T.int64(2), T.int64(3), T.int64(28), T.int64(28)))
-                T_subtract_2 = T.alloc_buffer((T.int64(2), T.int64(3), T.int64(28), T.int64(28)))
-                T_multiply = T.alloc_buffer((T.int64(2), T.int64(3), T.int64(28), T.int64(28)))
-                T_multiply_red = T.alloc_buffer((T.int64(3),))
-                T_divide_1 = T.alloc_buffer((T.int64(3),))
-                T_reshape_1 = T.alloc_buffer((T.int64(1), T.int64(3), T.int64(1), T.int64(1)))
-                T_add_3 = T.alloc_buffer((T.int64(1), T.int64(3), T.int64(1), T.int64(1)))
-                compute = T.alloc_buffer((T.int64(1), T.int64(3), T.int64(1), T.int64(1)))
-                T_divide_2 = T.alloc_buffer((T.int64(2), T.int64(3), T.int64(28), T.int64(28)))
-                T_reshape_2 = T.alloc_buffer((T.int64(1), T.int64(3), T.int64(1), T.int64(1)))
-                T_multiply_1 = T.alloc_buffer((T.int64(2), T.int64(3), T.int64(28), T.int64(28)))
-                T_reshape_3 = T.alloc_buffer((T.int64(1), T.int64(3), T.int64(1), T.int64(1)))
-                T_multiply_2 = T.alloc_buffer((T.int64(3),))
-                T_multiply_3 = T.alloc_buffer((T.int64(3),))
-                T_multiply_4 = T.alloc_buffer((T.int64(3),))
-                T_multiply_5 = T.alloc_buffer((T.int64(3),))
+                x_red = T.sblock_alloc_buffer((T.int64(3),))
+                T_divide = T.sblock_alloc_buffer((T.int64(3),))
+                T_reshape = T.sblock_alloc_buffer((T.int64(1), T.int64(3), T.int64(1), T.int64(1)))
+                T_subtract = T.sblock_alloc_buffer((T.int64(2), T.int64(3), T.int64(28), T.int64(28)))
+                T_subtract_1 = T.sblock_alloc_buffer((T.int64(2), T.int64(3), T.int64(28), T.int64(28)))
+                T_subtract_2 = T.sblock_alloc_buffer((T.int64(2), T.int64(3), T.int64(28), T.int64(28)))
+                T_multiply = T.sblock_alloc_buffer((T.int64(2), T.int64(3), T.int64(28), T.int64(28)))
+                T_multiply_red = T.sblock_alloc_buffer((T.int64(3),))
+                T_divide_1 = T.sblock_alloc_buffer((T.int64(3),))
+                T_reshape_1 = T.sblock_alloc_buffer((T.int64(1), T.int64(3), T.int64(1), T.int64(1)))
+                T_add_3 = T.sblock_alloc_buffer((T.int64(1), T.int64(3), T.int64(1), T.int64(1)))
+                compute = T.sblock_alloc_buffer((T.int64(1), T.int64(3), T.int64(1), T.int64(1)))
+                T_divide_2 = T.sblock_alloc_buffer((T.int64(2), T.int64(3), T.int64(28), T.int64(28)))
+                T_reshape_2 = T.sblock_alloc_buffer((T.int64(1), T.int64(3), T.int64(1), T.int64(1)))
+                T_multiply_1 = T.sblock_alloc_buffer((T.int64(2), T.int64(3), T.int64(28), T.int64(28)))
+                T_reshape_3 = T.sblock_alloc_buffer((T.int64(1), T.int64(3), T.int64(1), T.int64(1)))
+                T_multiply_2 = T.sblock_alloc_buffer((T.int64(3),))
+                T_multiply_3 = T.sblock_alloc_buffer((T.int64(3),))
+                T_multiply_4 = T.sblock_alloc_buffer((T.int64(3),))
+                T_multiply_5 = T.sblock_alloc_buffer((T.int64(3),))
                 for ax0 in range(T.int64(3)):
                     for k0 in range(T.int64(2)):
                         for k2 in range(T.int64(28)):
@@ -2328,7 +2328,7 @@ def test_batch_norm_symbolic():
     class Expected:
         @T.prim_func(private=True)
         def batch_norm(var_x: T.handle, var_gamma: T.handle, var_beta: T.handle, var_moving_mean: T.handle, var_moving_var: T.handle, var_T_add: T.handle, var_T_add_1: T.handle, var_T_add_2: T.handle):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             n, h, w, c = T.int64(), T.int64(), T.int64(), T.int64()
             x = T.match_buffer(var_x, (n, h, w, c))
             gamma = T.match_buffer(var_gamma, (c,))
@@ -2341,26 +2341,26 @@ def test_batch_norm_symbolic():
             with T.sblock("root"):
                 T.reads()
                 T.writes()
-                x_red = T.alloc_buffer((h,))
-                T_divide = T.alloc_buffer((h,))
-                T_reshape = T.alloc_buffer((T.int64(1), h, T.int64(1), T.int64(1)))
-                T_subtract = T.alloc_buffer((n, h, w, c))
-                T_subtract_1 = T.alloc_buffer((n, h, w, c))
-                T_subtract_2 = T.alloc_buffer((n, h, w, c))
-                T_multiply = T.alloc_buffer((n, h, w, c))
-                T_multiply_red = T.alloc_buffer((h,))
-                T_divide_1 = T.alloc_buffer((h,))
-                T_reshape_1 = T.alloc_buffer((T.int64(1), h, T.int64(1), T.int64(1)))
-                T_add_3 = T.alloc_buffer((T.int64(1), h, T.int64(1), T.int64(1)))
-                compute = T.alloc_buffer((T.int64(1), h, T.int64(1), T.int64(1)))
-                T_divide_2 = T.alloc_buffer((n, h, w, c))
-                T_reshape_2 = T.alloc_buffer((T.int64(1), h, T.int64(1), T.int64(1)))
-                T_multiply_1 = T.alloc_buffer((n, h, w, c))
-                T_reshape_3 = T.alloc_buffer((T.int64(1), h, T.int64(1), T.int64(1)))
-                T_multiply_2 = T.alloc_buffer((c,))
-                T_multiply_3 = T.alloc_buffer((h,))
-                T_multiply_4 = T.alloc_buffer((c,))
-                T_multiply_5 = T.alloc_buffer((h,))
+                x_red = T.sblock_alloc_buffer((h,))
+                T_divide = T.sblock_alloc_buffer((h,))
+                T_reshape = T.sblock_alloc_buffer((T.int64(1), h, T.int64(1), T.int64(1)))
+                T_subtract = T.sblock_alloc_buffer((n, h, w, c))
+                T_subtract_1 = T.sblock_alloc_buffer((n, h, w, c))
+                T_subtract_2 = T.sblock_alloc_buffer((n, h, w, c))
+                T_multiply = T.sblock_alloc_buffer((n, h, w, c))
+                T_multiply_red = T.sblock_alloc_buffer((h,))
+                T_divide_1 = T.sblock_alloc_buffer((h,))
+                T_reshape_1 = T.sblock_alloc_buffer((T.int64(1), h, T.int64(1), T.int64(1)))
+                T_add_3 = T.sblock_alloc_buffer((T.int64(1), h, T.int64(1), T.int64(1)))
+                compute = T.sblock_alloc_buffer((T.int64(1), h, T.int64(1), T.int64(1)))
+                T_divide_2 = T.sblock_alloc_buffer((n, h, w, c))
+                T_reshape_2 = T.sblock_alloc_buffer((T.int64(1), h, T.int64(1), T.int64(1)))
+                T_multiply_1 = T.sblock_alloc_buffer((n, h, w, c))
+                T_reshape_3 = T.sblock_alloc_buffer((T.int64(1), h, T.int64(1), T.int64(1)))
+                T_multiply_2 = T.sblock_alloc_buffer((c,))
+                T_multiply_3 = T.sblock_alloc_buffer((h,))
+                T_multiply_4 = T.sblock_alloc_buffer((c,))
+                T_multiply_5 = T.sblock_alloc_buffer((h,))
                 for ax0 in range(h):
                     for k0 in range(n):
                         for k2 in range(w):
@@ -2626,9 +2626,9 @@ def test_layer_norm():
 
         @T.prim_func(private=True)
         def layer_norm(rxplaceholder: T.Buffer((T.int64(2), T.int64(3), T.int64(4), T.int64(5)), "float32"), rxplaceholder_1: T.Buffer((T.int64(4), T.int64(5)), "float32"), rxplaceholder_2: T.Buffer((T.int64(4), T.int64(5)), "float32"), T_layer_norm: T.Buffer((T.int64(2), T.int64(3), T.int64(4), T.int64(5)), "float32")):
-            T.func_attr({"tir.noalias": True})
-            rxplaceholder_red_temp_v0 = T.alloc_buffer([T.int64(2), T.int64(3)], dtype="float32")
-            rxplaceholder_red_temp_v1 = T.alloc_buffer([T.int64(2), T.int64(3)], dtype="float32")
+            T.func_attr({"tirx.noalias": True})
+            rxplaceholder_red_temp_v0 = T.sblock_alloc_buffer([T.int64(2), T.int64(3)], dtype="float32")
+            rxplaceholder_red_temp_v1 = T.sblock_alloc_buffer([T.int64(2), T.int64(3)], dtype="float32")
             for i0, i1, i2, i3 in T.grid(T.int64(2), T.int64(3), T.int64(4), T.int64(5)):
                 with T.sblock("rxplaceholder_red_temp"):
                     ax0, ax1, k2, k3 = T.axis.remap("SSRR", [i0, i1, i2, i3])
@@ -2669,10 +2669,10 @@ def test_layer_norm_1d():
     class LayerNorm_1D_Expected:
         @T.prim_func(private=True)
         def layer_norm(x: T.Buffer((T.int64(3),), "float32"), layer_norm_weight: T.Buffer((T.int64(3),), "float32"), layer_norm_bias: T.Buffer((T.int64(3),), "float32"), T_layer_norm: T.Buffer((T.int64(3),), "float32")):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             # with T.sblock("root"):
-            x_red_temp_v0 = T.alloc_buffer(())
-            x_red_temp_v1 = T.alloc_buffer(())
+            x_red_temp_v0 = T.sblock_alloc_buffer(())
+            x_red_temp_v1 = T.sblock_alloc_buffer(())
             for k0 in range(T.int64(3)):
                 with T.sblock("x_red_temp"):
                     v_k0 = T.axis.reduce(T.int64(3), k0)
@@ -2719,7 +2719,7 @@ def test_layer_norm_fp16():
     class Expected:
         @T.prim_func(private=True)
         def layer_norm(var_rxplaceholder: T.handle, var_rxplaceholder_1: T.handle, var_rxplaceholder_2: T.handle, var_T_layer_norm: T.handle):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             rxplaceholder = T.match_buffer(var_rxplaceholder, (T.int64(2), T.int64(3), T.int64(4), T.int64(5)), "float16")
             rxplaceholder_1 = T.match_buffer(var_rxplaceholder_1, (T.int64(4), T.int64(5)), "float16")
             rxplaceholder_2 = T.match_buffer(var_rxplaceholder_2, (T.int64(4), T.int64(5)), "float16")
@@ -2727,8 +2727,8 @@ def test_layer_norm_fp16():
             with T.sblock("root"):
                 T.reads()
                 T.writes()
-                rxplaceholder_red_temp_v0 = T.alloc_buffer((T.int64(2), T.int64(3)))
-                rxplaceholder_red_temp_v1 = T.alloc_buffer((T.int64(2), T.int64(3)))
+                rxplaceholder_red_temp_v0 = T.sblock_alloc_buffer((T.int64(2), T.int64(3)))
+                rxplaceholder_red_temp_v1 = T.sblock_alloc_buffer((T.int64(2), T.int64(3)))
                 for ax0 in range(T.int64(2)):
                     for ax1 in range(T.int64(3)):
                         for k2 in range(T.int64(4)):
@@ -2793,7 +2793,7 @@ def test_layer_norm_symbolic():
 
         @T.prim_func(private=True)
         def layer_norm(var_rxplaceholder: T.handle, var_rxplaceholder_1: T.handle, var_rxplaceholder_2: T.handle, var_T_layer_norm: T.handle):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             f = T.int64()
             n = T.int64()
             s = T.int64()
@@ -2801,8 +2801,8 @@ def test_layer_norm_symbolic():
             rxplaceholder_1 = T.match_buffer(var_rxplaceholder_1, [s, f], dtype="float32")
             rxplaceholder_2 = T.match_buffer(var_rxplaceholder_2, [s, f], dtype="float32")
             T_layer_norm = T.match_buffer(var_T_layer_norm, [n, s, f], dtype="float32")
-            rxplaceholder_red_temp_v0 = T.alloc_buffer([n], dtype="float32")
-            rxplaceholder_red_temp_v1 = T.alloc_buffer([n], dtype="float32")
+            rxplaceholder_red_temp_v0 = T.sblock_alloc_buffer([n], dtype="float32")
+            rxplaceholder_red_temp_v1 = T.sblock_alloc_buffer([n], dtype="float32")
             for i0, i1, i2 in T.grid(n, s, f):
                 with T.sblock("rxplaceholder_red_temp"):
                     ax0, k1, k2 = T.axis.remap("SRR", [i0, i1, i2])
@@ -2839,13 +2839,13 @@ def test_group_norm():
     class Expected:
         @T.prim_func(private=True)
         def group_norm(rxplaceholder: T.Buffer((T.int64(2), T.int64(4), T.int64(4), T.int64(5)), "float32"), rxplaceholder_1: T.Buffer((T.int64(4),), "float32"), rxplaceholder_2: T.Buffer((T.int64(4),), "float32"), T_reshape: T.Buffer((T.int64(2), T.int64(4), T.int64(4), T.int64(5)), "float32")):
-            T.func_attr({"tir.noalias": True})
-            T_reshape_1 = T.alloc_buffer((T.int64(2), T.int64(2), T.int64(2), T.int64(4), T.int64(5)))
-            rxplaceholder_red_temp_v0 = T.alloc_buffer((T.int64(2), T.int64(2)))
-            rxplaceholder_red_temp_v1 = T.alloc_buffer((T.int64(2), T.int64(2)))
-            T_reshape_2 = T.alloc_buffer((T.int64(2), T.int64(2)))
-            T_reshape_3 = T.alloc_buffer((T.int64(2), T.int64(2)))
-            T_group_norm = T.alloc_buffer((T.int64(2), T.int64(2), T.int64(2), T.int64(4), T.int64(5)))
+            T.func_attr({"tirx.noalias": True})
+            T_reshape_1 = T.sblock_alloc_buffer((T.int64(2), T.int64(2), T.int64(2), T.int64(4), T.int64(5)))
+            rxplaceholder_red_temp_v0 = T.sblock_alloc_buffer((T.int64(2), T.int64(2)))
+            rxplaceholder_red_temp_v1 = T.sblock_alloc_buffer((T.int64(2), T.int64(2)))
+            T_reshape_2 = T.sblock_alloc_buffer((T.int64(2), T.int64(2)))
+            T_reshape_3 = T.sblock_alloc_buffer((T.int64(2), T.int64(2)))
+            T_group_norm = T.sblock_alloc_buffer((T.int64(2), T.int64(2), T.int64(2), T.int64(4), T.int64(5)))
             for ax0, ax1, ax2, ax3, ax4 in T.grid(T.int64(2), T.int64(2), T.int64(2), T.int64(4), T.int64(5)):
                 with T.sblock("T_reshape"):
                     v_ax0, v_ax1, v_ax2, v_ax3, v_ax4 = T.axis.remap("SSSSS", [ax0, ax1, ax2, ax3, ax4])
@@ -2916,15 +2916,15 @@ def test_group_norm_fp16():
 
         @T.prim_func(private=True)
         def group_norm(rxplaceholder: T.Buffer((T.int64(2), T.int64(4), T.int64(4), T.int64(5)), "float16"), rxplaceholder_1: T.Buffer((T.int64(4),), "float16"), rxplaceholder_2: T.Buffer((T.int64(4),), "float16"), T_reshape: T.Buffer((T.int64(2), T.int64(4), T.int64(4), T.int64(5)), "float16")):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             # with T.sblock("root"):
-            T_reshape_1 = T.alloc_buffer((T.int64(2), T.int64(2), T.int64(2), T.int64(4), T.int64(5)), "float16")
-            T_cast = T.alloc_buffer((T.int64(2), T.int64(2), T.int64(2), T.int64(4), T.int64(5)))
-            rxplaceholder_red_temp_v0 = T.alloc_buffer((T.int64(2), T.int64(2)))
-            rxplaceholder_red_temp_v1 = T.alloc_buffer((T.int64(2), T.int64(2)))
-            T_reshape_2 = T.alloc_buffer((T.int64(2), T.int64(2)), "float16")
-            T_reshape_3 = T.alloc_buffer((T.int64(2), T.int64(2)), "float16")
-            T_group_norm = T.alloc_buffer((T.int64(2), T.int64(2), T.int64(2), T.int64(4), T.int64(5)), "float16")
+            T_reshape_1 = T.sblock_alloc_buffer((T.int64(2), T.int64(2), T.int64(2), T.int64(4), T.int64(5)), "float16")
+            T_cast = T.sblock_alloc_buffer((T.int64(2), T.int64(2), T.int64(2), T.int64(4), T.int64(5)))
+            rxplaceholder_red_temp_v0 = T.sblock_alloc_buffer((T.int64(2), T.int64(2)))
+            rxplaceholder_red_temp_v1 = T.sblock_alloc_buffer((T.int64(2), T.int64(2)))
+            T_reshape_2 = T.sblock_alloc_buffer((T.int64(2), T.int64(2)), "float16")
+            T_reshape_3 = T.sblock_alloc_buffer((T.int64(2), T.int64(2)), "float16")
+            T_group_norm = T.sblock_alloc_buffer((T.int64(2), T.int64(2), T.int64(2), T.int64(4), T.int64(5)), "float16")
             for ax0, ax1, ax2, ax3, ax4 in T.grid(T.int64(2), T.int64(2), T.int64(2), T.int64(4), T.int64(5)):
                 with T.sblock("T_reshape"):
                     v_ax0, v_ax1, v_ax2, v_ax3, v_ax4 = T.axis.remap("SSSSS", [ax0, ax1, ax2, ax3, ax4])
@@ -2996,7 +2996,7 @@ def test_group_norm_symbolic():
     class Expected:
         @T.prim_func(private=True)
         def group_norm(var_rxplaceholder: T.handle, var_rxplaceholder_1: T.handle, var_rxplaceholder_2: T.handle, var_T_reshape: T.handle, c: T.int64):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             n = T.int64()
             h = T.int64()
             w = T.int64()
@@ -3005,12 +3005,12 @@ def test_group_norm_symbolic():
             rxplaceholder_2 = T.match_buffer(var_rxplaceholder_2, (T.int64(4) * c,))
             T_reshape = T.match_buffer(var_T_reshape, (n, T.int64(4) * c, h, w))
             # with T.sblock("root"):
-            T_reshape_1 = T.alloc_buffer((n, T.int64(4), T.int64(4) * c // T.int64(4), h, w))
-            rxplaceholder_red_temp_v0 = T.alloc_buffer((n, T.int64(4)))
-            rxplaceholder_red_temp_v1 = T.alloc_buffer((n, T.int64(4)))
-            T_reshape_2 = T.alloc_buffer((T.int64(4), T.int64(4) * c // T.int64(4)))
-            T_reshape_3 = T.alloc_buffer((T.int64(4), T.int64(4) * c // T.int64(4)))
-            T_group_norm = T.alloc_buffer((n, T.int64(4), T.int64(4) * c // T.int64(4), h, w))
+            T_reshape_1 = T.sblock_alloc_buffer((n, T.int64(4), T.int64(4) * c // T.int64(4), h, w))
+            rxplaceholder_red_temp_v0 = T.sblock_alloc_buffer((n, T.int64(4)))
+            rxplaceholder_red_temp_v1 = T.sblock_alloc_buffer((n, T.int64(4)))
+            T_reshape_2 = T.sblock_alloc_buffer((T.int64(4), T.int64(4) * c // T.int64(4)))
+            T_reshape_3 = T.sblock_alloc_buffer((T.int64(4), T.int64(4) * c // T.int64(4)))
+            T_group_norm = T.sblock_alloc_buffer((n, T.int64(4), T.int64(4) * c // T.int64(4), h, w))
             for ax0, ax1, ax2, ax3, ax4 in T.grid(n, T.int64(4), c, h, w):
                 with T.sblock("T_reshape"):
                     v_ax0, v_ax1, v_ax2, v_ax3, v_ax4 = T.axis.remap("SSSSS", [ax0, ax1, ax2, ax3, ax4])
@@ -3080,14 +3080,14 @@ def test_rms_norm():
     class Expected:
         @T.prim_func(private=True)
         def rms_norm(A: T.Buffer((T.int64(2), T.int64(3), T.int64(4), T.int64(5)), "float32"), B: T.Buffer((T.int64(4), T.int64(5)), "float32"), T_cast: T.Buffer((T.int64(2), T.int64(3), T.int64(4), T.int64(5)), "float32")):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             # with T.sblock("root"):
-            T_cast_1 = T.alloc_buffer((T.int64(2), T.int64(3), T.int64(4), T.int64(5)))
-            T_multiply = T.alloc_buffer((T.int64(2), T.int64(3), T.int64(4), T.int64(5)))
-            T_multiply_red = T.alloc_buffer((T.int64(2), T.int64(3)))
-            rsqrt = T.alloc_buffer((T.int64(2), T.int64(3)))
-            T_cast_2 = T.alloc_buffer((T.int64(4), T.int64(5)))
-            T_rms_norm = T.alloc_buffer((T.int64(2), T.int64(3), T.int64(4), T.int64(5)))
+            T_cast_1 = T.sblock_alloc_buffer((T.int64(2), T.int64(3), T.int64(4), T.int64(5)))
+            T_multiply = T.sblock_alloc_buffer((T.int64(2), T.int64(3), T.int64(4), T.int64(5)))
+            T_multiply_red = T.sblock_alloc_buffer((T.int64(2), T.int64(3)))
+            rsqrt = T.sblock_alloc_buffer((T.int64(2), T.int64(3)))
+            T_cast_2 = T.sblock_alloc_buffer((T.int64(4), T.int64(5)))
+            T_rms_norm = T.sblock_alloc_buffer((T.int64(2), T.int64(3), T.int64(4), T.int64(5)))
             for ax0, ax1, ax2, ax3 in T.grid(T.int64(2), T.int64(3), T.int64(4), T.int64(5)):
                 with T.sblock("T_cast"):
                     v_ax0, v_ax1, v_ax2, v_ax3 = T.axis.remap("SSSS", [ax0, ax1, ax2, ax3])
@@ -3156,14 +3156,14 @@ def test_rms_norm_fp16():
     class Expected:
         @T.prim_func(private=True)
         def rms_norm(A: T.Buffer((T.int64(2), T.int64(3), T.int64(4), T.int64(5)), "float16"), B: T.Buffer((T.int64(4), T.int64(5)), "float16"), T_cast: T.Buffer((T.int64(2), T.int64(3), T.int64(4), T.int64(5)), "float16")):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             # with T.sblock("root"):
-            T_cast_1 = T.alloc_buffer((T.int64(2), T.int64(3), T.int64(4), T.int64(5)))
-            T_multiply = T.alloc_buffer((T.int64(2), T.int64(3), T.int64(4), T.int64(5)))
-            T_multiply_red = T.alloc_buffer((T.int64(2), T.int64(3)))
-            rsqrt = T.alloc_buffer((T.int64(2), T.int64(3)))
-            T_cast_2 = T.alloc_buffer((T.int64(4), T.int64(5)))
-            T_rms_norm = T.alloc_buffer((T.int64(2), T.int64(3), T.int64(4), T.int64(5)))
+            T_cast_1 = T.sblock_alloc_buffer((T.int64(2), T.int64(3), T.int64(4), T.int64(5)))
+            T_multiply = T.sblock_alloc_buffer((T.int64(2), T.int64(3), T.int64(4), T.int64(5)))
+            T_multiply_red = T.sblock_alloc_buffer((T.int64(2), T.int64(3)))
+            rsqrt = T.sblock_alloc_buffer((T.int64(2), T.int64(3)))
+            T_cast_2 = T.sblock_alloc_buffer((T.int64(4), T.int64(5)))
+            T_rms_norm = T.sblock_alloc_buffer((T.int64(2), T.int64(3), T.int64(4), T.int64(5)))
             for ax0, ax1, ax2, ax3 in T.grid(T.int64(2), T.int64(3), T.int64(4), T.int64(5)):
                 with T.sblock("T_cast"):
                     v_ax0, v_ax1, v_ax2, v_ax3 = T.axis.remap("SSSS", [ax0, ax1, ax2, ax3])
@@ -3235,18 +3235,18 @@ def test_rms_norm_symbolic():
     class Expected:
         @T.prim_func(private=True)
         def rms_norm(var_A: T.handle, var_B: T.handle, var_T_cast: T.handle):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             n, s, f = T.int64(), T.int64(), T.int64()
             A = T.match_buffer(var_A, (n, s, f))
             B = T.match_buffer(var_B, (s, f))
             T_cast = T.match_buffer(var_T_cast, (n, s, f))
             # with T.sblock("root"):
-            T_cast_1 = T.alloc_buffer((n, s, f))
-            T_multiply = T.alloc_buffer((n, s, f))
-            T_multiply_red = T.alloc_buffer((n,))
-            rsqrt = T.alloc_buffer((n,))
-            T_cast_2 = T.alloc_buffer((s, f))
-            T_rms_norm = T.alloc_buffer((n, s, f))
+            T_cast_1 = T.sblock_alloc_buffer((n, s, f))
+            T_multiply = T.sblock_alloc_buffer((n, s, f))
+            T_multiply_red = T.sblock_alloc_buffer((n,))
+            rsqrt = T.sblock_alloc_buffer((n,))
+            T_cast_2 = T.sblock_alloc_buffer((s, f))
+            T_rms_norm = T.sblock_alloc_buffer((n, s, f))
             for ax0, ax1, ax2 in T.grid(n, s, f):
                 with T.sblock("T_cast"):
                     v_ax0, v_ax1, v_ax2 = T.axis.remap("SSS", [ax0, ax1, ax2])
@@ -3318,14 +3318,14 @@ def test_rms_norm_no_bias():
     class Expected:
         @T.prim_func(private=True)
         def rms_norm(A: T.Buffer((T.int64(2), T.int64(3), T.int64(4), T.int64(5)), "float32"), B: T.Buffer((T.int64(4), T.int64(5)), "float32"), T_cast: T.Buffer((T.int64(2), T.int64(3), T.int64(4), T.int64(5)), "float32")):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             # with T.sblock("root"):
-            T_cast_1 = T.alloc_buffer((T.int64(2), T.int64(3), T.int64(4), T.int64(5)))
-            T_multiply = T.alloc_buffer((T.int64(2), T.int64(3), T.int64(4), T.int64(5)))
-            T_multiply_red = T.alloc_buffer((T.int64(2), T.int64(3)))
-            rsqrt = T.alloc_buffer((T.int64(2), T.int64(3)))
-            T_cast_2 = T.alloc_buffer((T.int64(4), T.int64(5)))
-            T_rms_norm = T.alloc_buffer((T.int64(2), T.int64(3), T.int64(4), T.int64(5)))
+            T_cast_1 = T.sblock_alloc_buffer((T.int64(2), T.int64(3), T.int64(4), T.int64(5)))
+            T_multiply = T.sblock_alloc_buffer((T.int64(2), T.int64(3), T.int64(4), T.int64(5)))
+            T_multiply_red = T.sblock_alloc_buffer((T.int64(2), T.int64(3)))
+            rsqrt = T.sblock_alloc_buffer((T.int64(2), T.int64(3)))
+            T_cast_2 = T.sblock_alloc_buffer((T.int64(4), T.int64(5)))
+            T_rms_norm = T.sblock_alloc_buffer((T.int64(2), T.int64(3), T.int64(4), T.int64(5)))
             for ax0, ax1, ax2, ax3 in T.grid(T.int64(2), T.int64(3), T.int64(4), T.int64(5)):
                 with T.sblock("T_cast"):
                     v_ax0, v_ax1, v_ax2, v_ax3 = T.axis.remap("SSSS", [ax0, ax1, ax2, ax3])
@@ -3395,28 +3395,28 @@ def test_attention():
     class Expected:
         @T.prim_func(private=True)
         def attention_bias(q: T.Buffer((T.int64(4), T.int64(16), T.int64(32), T.int64(8)), "float32"), k: T.Buffer((T.int64(4), T.int64(8), T.int64(32), T.int64(8)), "float32"), v: T.Buffer((T.int64(4), T.int64(8), T.int64(32), T.int64(16)), "float32"), bias: T.Buffer((T.int64(4), T.int64(32), T.int64(16), T.int64(8)), "float32"), T_transpose: T.Buffer((T.int64(4), T.int64(16), T.int64(32), T.int64(16)), "float32")):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             # with T.sblock("root"):
-            T_transpose_1 = T.alloc_buffer((T.int64(4), T.int64(32), T.int64(16), T.int64(8)))
-            T_reshape = T.alloc_buffer((T.int64(128), T.int64(16), T.int64(8)))
-            T_transpose_2 = T.alloc_buffer((T.int64(4), T.int64(32), T.int64(8), T.int64(8)))
-            T_reshape_1 = T.alloc_buffer((T.int64(128), T.int64(8), T.int64(8)))
-            T_batch_matmul_NT = T.alloc_buffer((T.int64(128), T.int64(16), T.int64(8)))
-            T_multiply = T.alloc_buffer((T.int64(128), T.int64(16), T.int64(8)))
-            T_reshape_2 = T.alloc_buffer((T.int64(4), T.int64(32), T.int64(16), T.int64(8)))
-            T_add = T.alloc_buffer((T.int64(4), T.int64(32), T.int64(16), T.int64(8)))
-            T_reshape_3 = T.alloc_buffer((T.int64(128), T.int64(16), T.int64(8)))
-            trilu = T.alloc_buffer((T.int64(128), T.int64(16), T.int64(8)))
-            trilu_red = T.alloc_buffer((T.int64(128), T.int64(16), T.int64(1)))
-            T_subtract = T.alloc_buffer((T.int64(128), T.int64(16), T.int64(8)))
-            compute = T.alloc_buffer((T.int64(128), T.int64(16), T.int64(8)))
-            trilu_1 = T.alloc_buffer((T.int64(128), T.int64(16), T.int64(8)))
-            trilu_red_1 = T.alloc_buffer((T.int64(128), T.int64(16), T.int64(1)))
-            T_divide = T.alloc_buffer((T.int64(128), T.int64(16), T.int64(8)))
-            T_transpose_3 = T.alloc_buffer((T.int64(4), T.int64(32), T.int64(8), T.int64(16)))
-            T_reshape_4 = T.alloc_buffer((T.int64(128), T.int64(8), T.int64(16)))
-            T_batch_matmul_NN = T.alloc_buffer((T.int64(128), T.int64(16), T.int64(16)))
-            T_reshape_5 = T.alloc_buffer((T.int64(4), T.int64(32), T.int64(16), T.int64(16)))
+            T_transpose_1 = T.sblock_alloc_buffer((T.int64(4), T.int64(32), T.int64(16), T.int64(8)))
+            T_reshape = T.sblock_alloc_buffer((T.int64(128), T.int64(16), T.int64(8)))
+            T_transpose_2 = T.sblock_alloc_buffer((T.int64(4), T.int64(32), T.int64(8), T.int64(8)))
+            T_reshape_1 = T.sblock_alloc_buffer((T.int64(128), T.int64(8), T.int64(8)))
+            T_batch_matmul_NT = T.sblock_alloc_buffer((T.int64(128), T.int64(16), T.int64(8)))
+            T_multiply = T.sblock_alloc_buffer((T.int64(128), T.int64(16), T.int64(8)))
+            T_reshape_2 = T.sblock_alloc_buffer((T.int64(4), T.int64(32), T.int64(16), T.int64(8)))
+            T_add = T.sblock_alloc_buffer((T.int64(4), T.int64(32), T.int64(16), T.int64(8)))
+            T_reshape_3 = T.sblock_alloc_buffer((T.int64(128), T.int64(16), T.int64(8)))
+            trilu = T.sblock_alloc_buffer((T.int64(128), T.int64(16), T.int64(8)))
+            trilu_red = T.sblock_alloc_buffer((T.int64(128), T.int64(16), T.int64(1)))
+            T_subtract = T.sblock_alloc_buffer((T.int64(128), T.int64(16), T.int64(8)))
+            compute = T.sblock_alloc_buffer((T.int64(128), T.int64(16), T.int64(8)))
+            trilu_1 = T.sblock_alloc_buffer((T.int64(128), T.int64(16), T.int64(8)))
+            trilu_red_1 = T.sblock_alloc_buffer((T.int64(128), T.int64(16), T.int64(1)))
+            T_divide = T.sblock_alloc_buffer((T.int64(128), T.int64(16), T.int64(8)))
+            T_transpose_3 = T.sblock_alloc_buffer((T.int64(4), T.int64(32), T.int64(8), T.int64(16)))
+            T_reshape_4 = T.sblock_alloc_buffer((T.int64(128), T.int64(8), T.int64(16)))
+            T_batch_matmul_NN = T.sblock_alloc_buffer((T.int64(128), T.int64(16), T.int64(16)))
+            T_reshape_5 = T.sblock_alloc_buffer((T.int64(4), T.int64(32), T.int64(16), T.int64(16)))
             for ax0, ax1, ax2, ax3 in T.grid(T.int64(4), T.int64(32), T.int64(16), T.int64(8)):
                 with T.sblock("T_transpose"):
                     v_ax0, v_ax1, v_ax2, v_ax3 = T.axis.remap("SSSS", [ax0, ax1, ax2, ax3])
@@ -3620,13 +3620,13 @@ def test_nll_loss():
                 output: T.Buffer((), "float32"),
         ):
             # function attr dict
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             # body
             # with T.sblock("root")
-            nll_loss = T.alloc_buffer([T.int64(2), T.int64(4), T.int64(5)], dtype="float32")
-            nll_loss_red = T.alloc_buffer([], dtype="float32")
-            nll_loss_1 = T.alloc_buffer([T.int64(2), T.int64(4), T.int64(5)], dtype="float32")
-            nll_loss_red_1 = T.alloc_buffer([], dtype="float32")
+            nll_loss = T.sblock_alloc_buffer([T.int64(2), T.int64(4), T.int64(5)], dtype="float32")
+            nll_loss_red = T.sblock_alloc_buffer([], dtype="float32")
+            nll_loss_1 = T.sblock_alloc_buffer([T.int64(2), T.int64(4), T.int64(5)], dtype="float32")
+            nll_loss_red_1 = T.sblock_alloc_buffer([], dtype="float32")
             for ax0, ax1, ax2 in T.grid(T.int64(2), T.int64(4), T.int64(5)):
                 with T.sblock("nll_loss"):
                     v_ax0, v_ax1, v_ax2 = T.axis.remap("SSS", [ax0, ax1, ax2])
@@ -3685,14 +3685,14 @@ def test_nll_no_weight():
         @T.prim_func(private=True)
         def nll_loss_without_weight(rxplaceholder: T.Buffer((T.int64(2), T.int64(3), T.int64(4), T.int64(5)), "float32"), rxplaceholder_1: T.Buffer((T.int64(2), T.int64(4), T.int64(5)), "int64"), T_divide: T.Buffer((), "float32"),):
             # function attr dict
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             # body
             # with T.sblock("root")
-            T_full = T.alloc_buffer([T.int64(3)], dtype="float32")
-            nll_loss = T.alloc_buffer([T.int64(2), T.int64(4), T.int64(5)], dtype="float32")
-            nll_loss_red = T.alloc_buffer([], dtype="float32")
-            nll_loss_1 = T.alloc_buffer([T.int64(2), T.int64(4), T.int64(5)], dtype="float32")
-            nll_loss_red_1 = T.alloc_buffer([], dtype="float32")
+            T_full = T.sblock_alloc_buffer([T.int64(3)], dtype="float32")
+            nll_loss = T.sblock_alloc_buffer([T.int64(2), T.int64(4), T.int64(5)], dtype="float32")
+            nll_loss_red = T.sblock_alloc_buffer([], dtype="float32")
+            nll_loss_1 = T.sblock_alloc_buffer([T.int64(2), T.int64(4), T.int64(5)], dtype="float32")
+            nll_loss_red_1 = T.sblock_alloc_buffer([], dtype="float32")
             for ax0 in T.serial(T.int64(3)):
                 with T.sblock("T_full"):
                     v_ax0 = T.axis.spatial(T.int64(3), ax0)
@@ -3757,13 +3757,13 @@ def test_nll_no_batch():
 
         @T.prim_func(private=True)
         def nll_loss(var_rxplaceholder: T.handle, rxplaceholder: T.Buffer((), "int64"), var_rxplaceholder_1: T.handle, T_divide: T.Buffer((), "float32")):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             C = T.int64()
             rxplaceholder_1 = T.match_buffer(var_rxplaceholder, (C,))
             rxplaceholder_2 = T.match_buffer(var_rxplaceholder_1, (C,))
             # with T.sblock("root"):
-            nll_loss = T.alloc_buffer(())
-            nll_loss_1 = T.alloc_buffer(())
+            nll_loss = T.sblock_alloc_buffer(())
+            nll_loss_1 = T.sblock_alloc_buffer(())
             with T.sblock("nll_loss"):
                 vi = T.axis.spatial(T.int64(1), T.int64(0))
                 T.reads(rxplaceholder[()], rxplaceholder_1[rxplaceholder[()]], rxplaceholder_2[rxplaceholder[()]])
@@ -3805,7 +3805,7 @@ def test_nll_loss_symbolic():
         @T.prim_func(private=True)
         def nll_loss(var_rxplaceholder: T.handle, var_rxplaceholder_1: T.handle, var_rxplaceholder_2: T.handle, T_divide: T.Buffer((), "float32"),):
             # function attr dict
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             C = T.int64()
             N = T.int64()
             d1 = T.int64()
@@ -3815,10 +3815,10 @@ def test_nll_loss_symbolic():
             rxplaceholder_2 = T.match_buffer(var_rxplaceholder_2, [C], dtype="float32")
             # body
             # with T.sblock("root")
-            nll_loss = T.alloc_buffer([N, d1, d2], dtype="float32")
-            nll_loss_red = T.alloc_buffer([], dtype="float32")
-            nll_loss_1 = T.alloc_buffer([N, d1, d2], dtype="float32")
-            nll_loss_red_1 = T.alloc_buffer([], dtype="float32")
+            nll_loss = T.sblock_alloc_buffer([N, d1, d2], dtype="float32")
+            nll_loss_red = T.sblock_alloc_buffer([], dtype="float32")
+            nll_loss_1 = T.sblock_alloc_buffer([N, d1, d2], dtype="float32")
+            nll_loss_red_1 = T.sblock_alloc_buffer([], dtype="float32")
             for ax0, ax1, ax2 in T.grid(N, d1, d2):
                 with T.sblock("nll_loss"):
                     v_ax0, v_ax1, v_ax2 = T.axis.remap("SSS", [ax0, ax1, ax2])
@@ -3879,7 +3879,7 @@ def test_pad():
             A: T.Buffer((T.int64(2), T.int64(128), T.int64(28)), "float32"),
             PadInput: T.Buffer((T.int64(2), T.int64(130), T.int64(30)), "float32"),
         ):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             # with T.sblock("root"):
             for i0, i1, i2 in T.grid(T.int64(2), T.int64(130), T.int64(30)):
                 with T.sblock("PadInput"):
@@ -3917,7 +3917,7 @@ def test_batch_flatten():
 
         @T.prim_func(private=True)
         def reshape(x: T.Buffer((T.int64(2), T.int64(3), T.int64(4), T.int64(5)), "float32"), T_reshape: T.Buffer((T.int64(2), T.int64(60)), "float32")):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             for ax0, ax1 in T.grid(T.int64(2), T.int64(60)):
                 with T.sblock("T_reshape"):
                     v_ax0, v_ax1 = T.axis.remap("SS", [ax0, ax1])

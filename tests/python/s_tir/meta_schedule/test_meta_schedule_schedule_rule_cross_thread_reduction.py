@@ -23,7 +23,7 @@ from tvm.s_tir.meta_schedule.testing.space_generation import (
     check_sketches,
     generate_design_space,
 )
-from tvm.script import tir as T
+from tvm.script import tirx as T
 from tvm.target import Target
 from tvm.te import create_prim_func
 
@@ -34,8 +34,8 @@ class Softmax_mn_after_inline:
     def main(
         A: T.Buffer((256, 256), "float32"), T_softmax_norm: T.Buffer((256, 256), "float32")
     ) -> None:
-        T_softmax_maxelem = T.alloc_buffer([256], dtype="float32")
-        T_softmax_expsum = T.alloc_buffer([256], dtype="float32")
+        T_softmax_maxelem = T.sblock_alloc_buffer([256], dtype="float32")
+        T_softmax_expsum = T.sblock_alloc_buffer([256], dtype="float32")
         for i0, i1 in T.grid(256, 256):
             with T.sblock("T_softmax_maxelem"):
                 i0_1, k = T.axis.remap("SR", [i0, i1])
@@ -67,12 +67,12 @@ def test_gpu_softmax_mn():
         T_softmax_norm: T.Buffer((256, 256), "float32"),
     ) -> None:
         # function attr dict
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
+        T.func_attr({"global_symbol": "main", "tirx.noalias": True})
         # body
         # with T.sblock("root")
-        T_softmax_maxelem = T.alloc_buffer([256], dtype="float32")
-        T_softmax_exp = T.alloc_buffer([256, 256], dtype="float32")
-        T_softmax_expsum = T.alloc_buffer([256], dtype="float32")
+        T_softmax_maxelem = T.sblock_alloc_buffer([256], dtype="float32")
+        T_softmax_exp = T.sblock_alloc_buffer([256, 256], dtype="float32")
+        T_softmax_expsum = T.sblock_alloc_buffer([256], dtype="float32")
         for i0, i1 in T.grid(256, 256):
             with T.sblock("T_softmax_maxelem"):
                 i0_1, k = T.axis.remap("SR", [i0, i1])
@@ -110,12 +110,12 @@ def test_gpu_softmax_mn():
         A: T.Buffer((256, 256), "float32"), T_softmax_norm: T.Buffer((256, 256), "float32")
     ) -> None:
         # function attr dict
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
+        T.func_attr({"global_symbol": "main", "tirx.noalias": True})
         # body
         # with T.sblock("root")
-        T_softmax_maxelem_shared = T.alloc_buffer([256], dtype="float32", scope="shared")
-        T_softmax_exp = T.alloc_buffer([256, 256], dtype="float32")
-        T_softmax_expsum = T.alloc_buffer([256], dtype="float32")
+        T_softmax_maxelem_shared = T.sblock_alloc_buffer([256], dtype="float32", scope="shared")
+        T_softmax_exp = T.sblock_alloc_buffer([256, 256], dtype="float32")
+        T_softmax_expsum = T.sblock_alloc_buffer([256], dtype="float32")
         for i0 in T.serial(256):
             for ax0, ax1_0 in T.grid(1, 1):
                 for ax1_1 in T.thread_binding(512, thread="threadIdx.x"):
@@ -162,12 +162,12 @@ def test_gpu_softmax_mn():
         A: T.Buffer((256, 256), "float32"), T_softmax_norm: T.Buffer((256, 256), "float32")
     ) -> None:
         # function attr dict
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
+        T.func_attr({"global_symbol": "main", "tirx.noalias": True})
         # body
         # with T.sblock("root")
-        T_softmax_maxelem = T.alloc_buffer([256], dtype="float32")
-        T_softmax_exp = T.alloc_buffer([256, 256], dtype="float32")
-        T_softmax_expsum_shared = T.alloc_buffer([256], dtype="float32", scope="shared")
+        T_softmax_maxelem = T.sblock_alloc_buffer([256], dtype="float32")
+        T_softmax_exp = T.sblock_alloc_buffer([256, 256], dtype="float32")
+        T_softmax_expsum_shared = T.sblock_alloc_buffer([256], dtype="float32", scope="shared")
         for i0, i1 in T.grid(256, 256):
             with T.sblock("T_softmax_maxelem"):
                 i0_1, k = T.axis.remap("SR", [i0, i1])
@@ -214,12 +214,12 @@ def test_gpu_softmax_mn():
         A: T.Buffer((256, 256), "float32"), T_softmax_norm: T.Buffer((256, 256), "float32")
     ) -> None:
         # function attr dict
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
+        T.func_attr({"global_symbol": "main", "tirx.noalias": True})
         # body
         # with T.sblock("root")
-        T_softmax_maxelem_shared = T.alloc_buffer([256], dtype="float32", scope="shared")
-        T_softmax_exp = T.alloc_buffer([256, 256], dtype="float32")
-        T_softmax_expsum_shared = T.alloc_buffer([256], dtype="float32", scope="shared")
+        T_softmax_maxelem_shared = T.sblock_alloc_buffer([256], dtype="float32", scope="shared")
+        T_softmax_exp = T.sblock_alloc_buffer([256, 256], dtype="float32")
+        T_softmax_expsum_shared = T.sblock_alloc_buffer([256], dtype="float32", scope="shared")
         for i0 in T.serial(256):
             for ax0, ax1_0 in T.grid(1, 1):
                 for ax1_1 in T.thread_binding(512, thread="threadIdx.x"):
@@ -301,8 +301,8 @@ def test_gpu_softmax_mn_after_inline():
     def softmax_mn_after_inline_0(
         A: T.Buffer((256, 256), "float32"), T_softmax_norm: T.Buffer((256, 256), "float32")
     ) -> None:
-        T_softmax_maxelem = T.alloc_buffer([256], dtype="float32")
-        T_softmax_expsum = T.alloc_buffer([256], dtype="float32")
+        T_softmax_maxelem = T.sblock_alloc_buffer([256], dtype="float32")
+        T_softmax_expsum = T.sblock_alloc_buffer([256], dtype="float32")
         for i0, i1 in T.grid(256, 256):
             with T.sblock("T_softmax_maxelem"):
                 i0_1, k = T.axis.remap("SR", [i0, i1])
@@ -336,8 +336,8 @@ def test_gpu_softmax_mn_after_inline():
     def softmax_mn_after_inline_1(
         A: T.Buffer((256, 256), "float32"), T_softmax_norm: T.Buffer((256, 256), "float32")
     ) -> None:
-        T_softmax_maxelem = T.alloc_buffer([256], dtype="float32")
-        T_softmax_expsum = T.alloc_buffer([256], dtype="float32")
+        T_softmax_maxelem = T.sblock_alloc_buffer([256], dtype="float32")
+        T_softmax_expsum = T.sblock_alloc_buffer([256], dtype="float32")
         for i0, i1_0 in T.grid(256, 4):
             for i1_1 in T.thread_binding(64, thread="threadIdx.x"):
                 with T.sblock("T_softmax_maxelem"):
@@ -373,8 +373,8 @@ def test_gpu_softmax_mn_after_inline():
     def softmax_mn_after_inline_2(
         A: T.Buffer((256, 256), "float32"), T_softmax_norm: T.Buffer((256, 256), "float32")
     ) -> None:
-        T_softmax_maxelem = T.alloc_buffer([256], dtype="float32")
-        T_softmax_expsum_shared = T.alloc_buffer([256], dtype="float32", scope="shared")
+        T_softmax_maxelem = T.sblock_alloc_buffer([256], dtype="float32")
+        T_softmax_expsum_shared = T.sblock_alloc_buffer([256], dtype="float32", scope="shared")
         for i0, i1 in T.grid(256, 256):
             with T.sblock("T_softmax_maxelem"):
                 i0_1, k = T.axis.remap("SR", [i0, i1])
@@ -417,8 +417,8 @@ def test_gpu_softmax_mn_after_inline():
     def softmax_mn_after_inline_3(
         A: T.Buffer((256, 256), "float32"), T_softmax_norm: T.Buffer((256, 256), "float32")
     ) -> None:
-        T_softmax_maxelem_shared = T.alloc_buffer([256], dtype="float32", scope="shared")
-        T_softmax_expsum_shared = T.alloc_buffer([256], dtype="float32", scope="shared")
+        T_softmax_maxelem_shared = T.sblock_alloc_buffer([256], dtype="float32", scope="shared")
+        T_softmax_expsum_shared = T.sblock_alloc_buffer([256], dtype="float32", scope="shared")
         for i0_3 in T.serial(256):
             for ax0, ax1_0 in T.grid(1, 1):
                 for ax1_1 in T.thread_binding(512, thread="threadIdx.x"):
@@ -500,10 +500,10 @@ def test_gpu_batch_norm_bmn():
     @T.prim_func
     def batch_norm_bmn_0(A: T.Buffer((1, 512, 512), "float32"), D: T.Buffer(1, "float32")) -> None:
         # function attr dict
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
+        T.func_attr({"global_symbol": "main", "tirx.noalias": True})
         # body
         # with T.sblock("root")
-        C = T.alloc_buffer([1], dtype="float32")
+        C = T.sblock_alloc_buffer([1], dtype="float32")
         for i0, i1, i2 in T.grid(1, 512, 512):
             with T.sblock("C"):
                 b, i, j = T.axis.remap("SRR", [i0, i1, i2])
@@ -522,10 +522,10 @@ def test_gpu_batch_norm_bmn():
     @T.prim_func
     def batch_norm_bmn_1(A: T.Buffer((1, 512, 512), "float32"), D: T.Buffer(1, "float32")) -> None:
         # function attr dict
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
+        T.func_attr({"global_symbol": "main", "tirx.noalias": True})
         # body
         # with T.sblock("root")
-        C_shared = T.alloc_buffer([1], dtype="float32", scope="shared")
+        C_shared = T.sblock_alloc_buffer([1], dtype="float32", scope="shared")
         for i0_0 in T.serial(1):
             for ax0, ax1_ax2_fused_0 in T.grid(1, 1024):
                 for ax1_ax2_fused_1 in T.thread_binding(256, thread="threadIdx.x"):

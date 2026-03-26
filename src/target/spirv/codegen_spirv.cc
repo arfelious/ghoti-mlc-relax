@@ -23,15 +23,16 @@
  */
 #include "codegen_spirv.h"
 
-#include <tvm/tir/builtin.h>
-#include <tvm/tir/expr.h>
-#include <tvm/tir/op.h>
+#include <tvm/s_tir/stmt.h>
+#include <tvm/tirx/builtin.h>
+#include <tvm/tirx/expr.h>
+#include <tvm/tirx/op.h>
 
 #include <string>
 
 #include "../../runtime/pack_args.h"
 #include "../../runtime/vulkan/vulkan_common.h"
-#include "../../tir/transform/ir_utils.h"
+#include "../../tirx/transform/ir_utils.h"
 
 namespace tvm {
 namespace codegen {
@@ -40,7 +41,7 @@ CodeGenSPIRV::CodeGenSPIRV(Target target) : spirv_support_(target) {}
 
 runtime::SPIRVShader CodeGenSPIRV::BuildFunction(const PrimFunc& f, const std::string& name) {
   this->InitFuncState();
-  TVM_FFI_ICHECK(f->HasNonzeroAttr(tir::attr::kNoAlias))
+  TVM_FFI_ICHECK(f->HasNonzeroAttr(tirx::attr::kNoAlias))
       << "SPIRV only takes restricted memory model";
   std::vector<Var> pod_args;
   uint32_t i_buffer = 0;
@@ -140,7 +141,7 @@ spirv::Value CodeGenSPIRV::GetThreadIndex(const IterVar& iv, const PrimExpr& ext
   spirv::Value v;
   if (ts.rank == 1) {
     v = builder_->GetLocalID(ts.dim_index);
-    auto* sizeptr = extent.as<tir::IntImmNode>();
+    auto* sizeptr = extent.as<tirx::IntImmNode>();
     TVM_FFI_ICHECK(sizeptr) << "SPIRV only allows constant thread group size "
                             << " get " << extent;
     TVM_FFI_ICHECK_GE(ts.dim_index, 0) << "vthread should have been optimized out by here";
@@ -164,7 +165,7 @@ spirv::Value CodeGenSPIRV::CreateStorageSync(const CallNode* op) {
     // Synchronize control at the Subgroup level, but memory at the
     // Workgroup level.  This is because different invocations in a
     // subgroup may have each modified memory that exists at the
-    // workgroup scope.  This should be changed if/when tir exposes
+    // workgroup scope.  This should be changed if/when tirx exposes
     // more information as to which memory access needs to be
     // synchronized.
     sync_scope = spv::ScopeSubgroup;
@@ -451,7 +452,7 @@ spirv::Value CodeGenSPIRV::VisitExpr_(const CallNode* op) {
     PrimExpr index_d = op->args[1];
     PrimExpr index_a = op->args[3];
     PrimExpr index_b = op->args[5];
-    tvm::tir::ExprDeepEqual expr_equal;
+    tvm::tirx::ExprDeepEqual expr_equal;
     PrimExpr index_c = op->args[7];
     bool is_equal = ((buffer_d == buffer_c) && expr_equal(index_d, index_c));
     spirv::SType& fragment_type_d = fragment_info_[buffer_d].stype;
@@ -798,19 +799,20 @@ void CodeGenSPIRV::VisitStmt_(const IfThenElseNode* op) {
   builder_->StartLabel(merge_label);
 }
 
-void CodeGenSPIRV::VisitStmt_(const AllocateNode* op) {
-  TVM_FFI_ICHECK(!is_zero(op->condition));
-  TVM_FFI_ICHECK(!op->dtype.is_handle());
-  size_t constant_size = op->ConstantAllocationSize();
+void CodeGenSPIRV::VisitStmt_(const AllocBufferNode* op) {
+  TVM_FFI_ICHECK(!op->buffer->dtype.is_handle());
+  const IntImmNode* dim_imm = op->buffer->shape[0].as<IntImmNode>();
+  TVM_FFI_ICHECK(dim_imm) << "Can only handle constant size stack allocation in GPU";
+  size_t constant_size = static_cast<size_t>(dim_imm->value);
   TVM_FFI_ICHECK_GT(constant_size, 0) << "Can only handle constant size stack allocation in GPU";
 
   spirv::Value buf;
-  const std::string scope = GetPtrStorageScope(op->buffer_var);
+  const std::string scope = GetPtrStorageScope(op->buffer->data);
   auto storage_scope = runtime::StorageScope::Create(scope);
-  spirv::SType etype = builder_->GetSType(op->dtype);
+  spirv::SType etype = builder_->GetSType(op->buffer->dtype);
   runtime::StorageRank rank = storage_scope.rank;
   spv::StorageClass storage_class;
-  const VarNode* var_node = (op->buffer_var).get();
+  const VarNode* var_node = op->buffer->data.get();
 
   switch (rank) {
     case runtime::StorageRank::kWMMAMatrixA:
@@ -818,13 +820,13 @@ void CodeGenSPIRV::VisitStmt_(const AllocateNode* op) {
     case runtime::StorageRank::kWMMAAccumulator: {
       TVM_FFI_ICHECK(fragment_info_.count(var_node));
       fragment_info_[var_node].scope = scope;
-      etype = GetFragmentSType(var_node, op->dtype);
+      etype = GetFragmentSType(var_node, op->buffer->dtype);
       storage_class = spv::StorageClassFunction;
       fragment_info_[var_node].sclass = storage_class;
       TVM_FFI_ICHECK(fragment_info_.count(var_node));
-      const std::string& scope = fragment_info_[var_node].scope;
+      const std::string& fscope = fragment_info_[var_node].scope;
       const std::string& shape_str = fragment_info_.at(var_node).shape;
-      std::pair<int32_t, int32_t> dim = GetWmmaFragmentDimSize(shape_str, scope);
+      std::pair<int32_t, int32_t> dim = GetWmmaFragmentDimSize(shape_str, fscope);
       int64_t size = dim.first * dim.second;
       buf = builder_->Allocate(etype, static_cast<uint32_t>(constant_size) / size, storage_class);
     } break;
@@ -839,29 +841,33 @@ void CodeGenSPIRV::VisitStmt_(const AllocateNode* op) {
       int32_t aligned_constant_size = ((constant_size + 3) & ~0x3);
       buf = builder_->Allocate(etype, static_cast<uint32_t>(aligned_constant_size), storage_class);
 
-      size_t num_bytes =
-          op->dtype.bytes() * op->dtype.lanes() * static_cast<uint32_t>(aligned_constant_size);
+      size_t num_bytes = op->buffer->dtype.bytes() * op->buffer->dtype.lanes() *
+                         static_cast<uint32_t>(aligned_constant_size);
       shared_memory_bytes_used_ += num_bytes;
     } break;
     default:
       TVM_FFI_THROW(InternalError) << "Can only allocate shared or local memory inside kernel";
   }
 
-  builder_->SetName(buf, op->buffer_var->name_hint);
+  builder_->SetName(buf, op->buffer->name);
 
-  StorageInfo& info = storage_info_[op->buffer_var.get()];
+  StorageInfo& info = storage_info_[var_node];
   TVM_FFI_ICHECK(!info.element_type_known);
-  info.SetContentType(op->dtype, op->buffer_var->name_hint);
+  info.SetContentType(op->buffer->dtype, op->buffer->name);
 
-  TVM_FFI_ICHECK(!var_map_.count(op->buffer_var.get()));
-  var_map_[op->buffer_var.get()] = buf;
-  this->VisitStmt(op->body);
+  TVM_FFI_ICHECK(!var_map_.count(var_node));
+  var_map_[var_node] = buf;
+  if (op->annotations.count(tirx::attr::kVolatile)) {
+    storage_info_[var_node].is_volatile = true;
+  }
 }
 
-void CodeGenSPIRV::VisitStmt_(const DeclBufferNode* op) { this->VisitStmt(op->body); }
+void CodeGenSPIRV::VisitStmt_(const DeclBufferNode* op) {
+  // DeclBuffer is a flat statement with no body — nothing to emit.
+}
 
 void CodeGenSPIRV::VisitStmt_(const AttrStmtNode* op) {
-  if (op->attr_key == tir::attr::thread_extent) {
+  if (op->attr_key == tirx::attr::thread_extent) {
     IterVar iv = Downcast<IterVar>(op->node);
     if (iv->thread_tag.length() != 0) {
       // Will throw error if rebinding same local variable to a different extent.
@@ -870,14 +876,7 @@ void CodeGenSPIRV::VisitStmt_(const AttrStmtNode* op) {
         var_map_[iv->var.get()] = GetThreadIndex(iv, op->value);
       }
     }
-  } else if (op->attr_key == tir::attr::volatile_scope) {
-    const VarNode* v = op->node.as<VarNode>();
-    TVM_FFI_ICHECK(v);
-    storage_info_[v].is_volatile = true;
-  } else if (op->attr_key == tir::attr::buffer_bind_scope) {
-    const VarNode* v = op->node.as<VarNode>();
-    TVM_FFI_ICHECK(v);
-  } else if (op->attr_key == tir::attr::fragment_shape) {
+  } else if (op->attr_key == s_tir::attr::fragment_shape) {
     const VarNode* buffer = op->node.as<VarNode>();
     const StringImmNode* shape_str = op->value.as<StringImmNode>();
     fragment_info_[buffer] = {shape_str->value};
@@ -889,12 +888,11 @@ void CodeGenSPIRV::VisitStmt_(const AssertStmtNode* op) {
   // AssertStmt is a leaf — no body to visit.
 }
 
-void CodeGenSPIRV::VisitStmt_(const LetStmtNode* op) {
+void CodeGenSPIRV::VisitStmt_(const BindNode* op) {
   TVM_FFI_ICHECK(!var_map_.count(op->var.get()));
   TVM_FFI_ICHECK(!op->var.dtype().is_handle());
   var_map_[op->var.get()] = MakeValue(op->value);
   analyzer_->Bind(op->var, op->value);
-  this->VisitStmt(op->body);
 }
 
 void CodeGenSPIRV::VisitStmt_(const SeqStmtNode* op) {

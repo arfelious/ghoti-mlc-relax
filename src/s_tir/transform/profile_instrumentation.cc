@@ -26,14 +26,14 @@
 
 #include <tvm/ffi/reflection/registry.h>
 #include <tvm/s_tir/transform.h>
-#include <tvm/tir/builtin.h>
-#include <tvm/tir/expr.h>
-#include <tvm/tir/stmt.h>
-#include <tvm/tir/stmt_functor.h>
+#include <tvm/tirx/builtin.h>
+#include <tvm/tirx/expr.h>
+#include <tvm/tirx/stmt.h>
+#include <tvm/tirx/stmt_functor.h>
 
 namespace tvm {
 namespace s_tir {
-using namespace tvm::tir;
+using namespace tvm::tirx;
 namespace lwp {
 
 TVM_REGISTER_PASS_CONFIG_OPTION("s_tir.lwp_disable_func_prof", Bool);
@@ -135,15 +135,22 @@ class LoopAnalyzer : public StmtExprVisitor {
       loop_info.height = height;
       loops[f] = loop_info;
       return height + 1;
-    } else if (stmt->IsInstance<LetStmtNode>()) {
-      const LetStmtNode* n = stmt.as<LetStmtNode>();
-      return TraverseLoop(n->body, parent_depth, has_parallel);
+    } else if (stmt->IsInstance<BindNode>()) {
+      // Bind has no body; skip it and return 0 (not a loop).
+      return 0;
+    } else if (stmt->IsInstance<SeqStmtNode>()) {
+      // For flat sequences, traverse children looking for loops.
+      const SeqStmtNode* seq = stmt.as<SeqStmtNode>();
+      unsigned max_height = 0;
+      for (const auto& s : seq->seq) {
+        max_height = std::max(max_height, TraverseLoop(s, parent_depth, has_parallel));
+      }
+      return max_height;
     } else if (stmt->IsInstance<AttrStmtNode>()) {
       const AttrStmtNode* n = stmt.as<AttrStmtNode>();
       return TraverseLoop(n->body, parent_depth, has_parallel);
-    } else if (stmt->IsInstance<AllocateNode>()) {
-      const AllocateNode* n = stmt.as<AllocateNode>();
-      return TraverseLoop(n->body, parent_depth, has_parallel);
+    } else if (stmt->IsInstance<AllocBufferNode>()) {
+      return 0;
     } else {
       return 0;  // inner-most loop
     }

@@ -24,13 +24,13 @@
 #include <tvm/ffi/reflection/registry.h>
 #include <tvm/s_tir/stmt.h>
 #include <tvm/s_tir/transform.h>
-#include <tvm/tir/stmt_functor.h>
+#include <tvm/tirx/stmt_functor.h>
 
-#include "../../tir/transform/ir_utils.h"
+#include "../../tirx/transform/ir_utils.h"
 
 namespace tvm {
 namespace s_tir {
-using namespace tvm::tir;
+using namespace tvm::tirx;
 
 /*!
  * \brief Remove SBlock to ensure that the TIR can not be scheduled again.
@@ -60,8 +60,6 @@ class OpaqueBlockLower : public StmtExprMutator {
     // Step 3. Handle allocations in reverse order
     for (size_t i = new_block->alloc_buffers.size(); i > 0; --i) {
       const Buffer& buffer = new_block->alloc_buffers[i - 1];
-      ffi::Array<PrimExpr> allocation_shape = GetBufferAllocationShape(buffer);
-      body = DeclBuffer(buffer, std::move(body));
       ffi::Map<ffi::String, ffi::Any> allocate_annotations;
       auto it = storage_align_.find(buffer->data);
       if (it != storage_align_.end()) {
@@ -73,8 +71,7 @@ class OpaqueBlockLower : public StmtExprMutator {
         allocate_annotations.Set(s_tir::attr::buffer_dim_align, allocate_aligns);
       }
 
-      body = Allocate(buffer->data, buffer->dtype, allocation_shape, const_true(), std::move(body),
-                      allocate_annotations);
+      body = SeqStmt::Flatten(AllocBuffer(buffer, allocate_annotations), std::move(body));
     }
     // Step 4. Handle annotations, block annotations are not preserved by default.
     std::vector<std::pair<std::string, PrimExpr>> pragma_attrs;
@@ -146,8 +143,8 @@ class OpaqueBlockLower : public StmtExprMutator {
                      /*thread_tag=*/thread_tag);
     ffi::String attr_key = (thread_tag == "vthread" || thread_tag == "vthread.x" ||
                             thread_tag == "vthread.y" || thread_tag == "vthread.z")
-                               ? tir::attr::virtual_thread
-                               : tir::attr::thread_extent;
+                               ? s_tir::attr::virtual_thread
+                               : tirx::attr::thread_extent;
     return AttrStmt(/*node=*/std::move(iter_var),
                     /*attr_key=*/std::move(attr_key),
                     /*value=*/std::move(extent),
@@ -184,7 +181,7 @@ class OpaqueBlockLower : public StmtExprMutator {
     pragma_attrs->clear();
     for (const auto& kv : annotations) {
       const ffi::String& key = kv.first;
-      if (tir::attr::IsPragmaKey(key)) {
+      if (tirx::attr::IsPragmaKey(key)) {
         pragma_attrs->emplace_back(key, ConvertAttrValue(key, kv.second));
       } else if (!is_block) {
         // the loop annotation is preserved

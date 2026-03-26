@@ -23,20 +23,21 @@
  */
 #include <tvm/ffi/function.h>
 #include <tvm/ffi/reflection/registry.h>
+#include <tvm/s_tir/stmt.h>
 #include <tvm/s_tir/transform.h>
-#include <tvm/tir/expr.h>
-#include <tvm/tir/stmt_functor.h>
+#include <tvm/tirx/expr.h>
+#include <tvm/tirx/stmt_functor.h>
 
 #include <unordered_map>
 #include <unordered_set>
 
 #include "../../runtime/thread_storage_scope.h"
-#include "../../tir/transform/ir_utils.h"
+#include "../../tirx/transform/ir_utils.h"
 #include "storage_access.h"
 
 namespace tvm {
 namespace s_tir {
-using namespace tvm::tir;
+using namespace tvm::tirx;
 
 // Get fragment information from tensor intrinsics
 class FragmentGetter : public StmtExprVisitor {
@@ -116,13 +117,13 @@ class FragmentGetter : public StmtExprVisitor {
 
 }  // namespace s_tir
 
-namespace tir {
+namespace tirx {
 std::unordered_map<const VarNode*, FragmentInfo> GetTensorCoreFragmentInfo(const Stmt& stmt) {
   s_tir::FragmentGetter getter;
   getter(stmt);
   return std::move(getter.fragments);
 }
-}  // namespace tir
+}  // namespace tirx
 
 namespace s_tir {
 
@@ -176,21 +177,18 @@ class InferFragmenter : public StmtMutator {
  public:
   explicit InferFragmenter(const FragmentGetter& getter) : fragment_getter(getter) {}
 
-  Stmt VisitStmt_(const AllocateNode* op) final {
+  Stmt VisitStmt_(const AllocBufferNode* op) final {
     Stmt stmt = StmtMutator::VisitStmt_(op);
-    const VarNode* buffer = op->buffer_var.get();
+    const VarNode* buffer = op->buffer->data.get();
     if (fragment_getter.fragments.count(buffer)) {
-      // Add attribute to fragments allocation
       FragmentInfo info = fragment_getter.fragments.at(buffer);
 
-      // Add shape attribute to all fragments
       std::string shape =
           std::to_string(info.m) + ", " + std::to_string(info.n) + ", " + std::to_string(info.k);
       PrimExpr shape_expr = StringImm(shape);
-      Stmt shape_attr = AttrStmt(op->buffer_var, tir::attr::fragment_shape, shape_expr, stmt);
+      Stmt shape_attr = AttrStmt(op->buffer->data, s_tir::attr::fragment_shape, shape_expr, stmt);
       if (info.layout != "") {
-        // Add shape attribute to matrix_a and matrix_b
-        Stmt layout_attr = AttrStmt(op->buffer_var, tir::attr::fragment_layout,
+        Stmt layout_attr = AttrStmt(op->buffer->data, s_tir::attr::fragment_layout,
                                     StringImm(info.layout), shape_attr);
         return layout_attr;
       } else {

@@ -20,7 +20,7 @@ import tvm.testing
 from tvm import relax as rx
 from tvm.relax.analysis import detect_recursion
 from tvm.script import relax as R
-from tvm.script import tir as T
+from tvm.script import tirx as T
 
 
 def assert_groups(groups: list[list[rx.GlobalVar]], expected: list[list[str]]) -> None:
@@ -422,7 +422,7 @@ def test_disregard_primfuncs():
         # copied from test_analysis.py
         @T.prim_func
         def identity_identity(A: T.Buffer((4, 4), "float32"), B: T.Buffer((4, 4), "float32")):
-            C = T.alloc_buffer((128, 128), "float32")
+            C = T.sblock_alloc_buffer((128, 128), "float32")
             for i0, i1 in T.grid(4, 4):
                 with T.sblock("identity"):
                     vi0, vi1 = T.axis.remap("SS", [i0, i1])

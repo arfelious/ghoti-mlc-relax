@@ -20,7 +20,7 @@ import numpy as np
 import tvm
 import tvm.testing
 from tvm.script import ir as I
-from tvm.script import tir as T
+from tvm.script import tirx as T
 
 
 @tvm.testing.requires_rocm
@@ -30,7 +30,7 @@ def test_rocm_inf_nan():
         class Module:
             @T.prim_func
             def main(A: T.Buffer((1,), dtype), C: T.Buffer((1,), dtype)):
-                T.func_attr({"tir.noalias": True})
+                T.func_attr({"tirx.noalias": True})
                 for i_0 in T.thread_binding(1, thread="blockIdx.x"):
                     for i_1 in T.thread_binding(128, thread="threadIdx.x"):
                         with T.sblock("C"):
@@ -83,7 +83,7 @@ def test_rocm_vectorize_add():
         class Module:
             @T.prim_func
             def main(A: T.Buffer((n,), vec_dtype), B: T.Buffer((n,), vec_dtype)):
-                T.func_attr({"tir.noalias": True})
+                T.func_attr({"tirx.noalias": True})
                 for i_0 in T.thread_binding(num_blocks, thread="blockIdx.x"):
                     for i_1 in T.thread_binding(4, thread="threadIdx.x"):
                         with T.sblock("B"):
@@ -115,9 +115,9 @@ def test_rocm_warp_shuffle():
         for bx in T.thread_binding(1, thread="blockIdx.x"):
             for tx in T.thread_binding(32, thread="threadIdx.x"):
                 with T.sblock("test"):
-                    A_local = T.alloc_buffer((1,), "float32", scope="local")
-                    mask = T.alloc_buffer((1,), "uint32", scope="local")
-                    t0 = T.alloc_buffer((1,), "float32", scope="local")
+                    A_local = T.sblock_alloc_buffer((1,), "float32", scope="local")
+                    mask = T.sblock_alloc_buffer((1,), "uint32", scope="local")
+                    t0 = T.sblock_alloc_buffer((1,), "float32", scope="local")
 
                     A_local[0] = A[tx]
                     A_local[0] = T.tvm_warp_shuffle(mask[0], A_local[0], 0, 32, 32)

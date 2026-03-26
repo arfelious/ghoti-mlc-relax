@@ -19,8 +19,8 @@
 import pytest
 
 import tvm
-from tvm import tir
-from tvm.script import tir as T
+from tvm import tirx
+from tvm.script import tirx as T
 
 # fmt: off
 # pylint: disable=no-member,invalid-name,unused-variable,no-self-argument,line-too-long,chained-comparison,not-callable,too-many-nested-blocks
@@ -36,7 +36,7 @@ class Module:
 
     @T.prim_func
     def scale_by_two_three(a: T.Buffer((128,), "int8"), c: T.Buffer((128,), "int8")):
-        B = T.alloc_buffer([128], dtype="int8", scope="global.vtcm")
+        B = T.sblock_alloc_buffer([128], dtype="int8", scope="global.vtcm")
         for i in T.serial(128):
             with T.sblock("B"):
                 B[i] = a[i] * T.int8(2)
@@ -74,9 +74,9 @@ def matmul_mix_scope(a: T.handle, b: T.handle, c: T.handle) -> None:
     A = T.match_buffer(a, [128, 128], scope="global")
     B = T.match_buffer(b, [128, 128], scope="global")
     C = T.match_buffer(c, [128, 128], scope="global")
-    A_allocated = T.alloc_buffer([128, 128], dtype="float32", scope="global.texture")
-    B_allocated = T.alloc_buffer([128, 128], dtype="float32", scope="global.texture")
-    C_allocated = T.alloc_buffer([128, 128], dtype="float32", scope="global")
+    A_allocated = T.sblock_alloc_buffer([128, 128], dtype="float32", scope="global.texture")
+    B_allocated = T.sblock_alloc_buffer([128, 128], dtype="float32", scope="global.texture")
+    C_allocated = T.sblock_alloc_buffer([128, 128], dtype="float32", scope="global")
 
     for i, j in T.grid(128, 128):
         with T.sblock("A.allocated"):

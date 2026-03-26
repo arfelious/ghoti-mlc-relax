@@ -27,7 +27,7 @@ from tvm.s_tir import meta_schedule as ms
 from tvm.s_tir.meta_schedule.testing.custom_builder_runner import run_module_via_rpc
 from tvm.s_tir.meta_schedule.testing.local_rpc import LocalRPC
 from tvm.s_tir.schedule import SBlockRV, Schedule
-from tvm.script import tir as T
+from tvm.script import tirx as T
 from tvm.target import Target
 
 logging.basicConfig()
@@ -50,7 +50,7 @@ def matmul(a: T.handle, b: T.handle, c: T.handle) -> None:
 @T.prim_func
 def two_step(a: T.handle, c: T.handle) -> None:
     A = T.match_buffer(a, (1024, 1024), "float32")
-    B = T.alloc_buffer((1024, 1024), "float32")
+    B = T.sblock_alloc_buffer((1024, 1024), "float32")
     C = T.match_buffer(c, (1024, 1024), "float32")
     for i, j in T.grid(1024, 1024):
         with T.sblock("A"):

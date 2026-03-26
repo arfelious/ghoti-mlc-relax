@@ -21,12 +21,12 @@ import pytest
 import tvm
 import tvm.testing
 from tvm.ir.module import IRModule
-from tvm.script import tir as T
+from tvm.script import tirx as T
 
 
 def collect_visit(stmt, f):
     ret = []
-    tvm.tir.stmt_functor.post_order_visit(stmt, lambda x: ret.append(f(x)))
+    tvm.tirx.stmt_functor.post_order_visit(stmt, lambda x: ret.append(f(x)))
     return ret
 
 
@@ -43,9 +43,9 @@ def test_multi_loop():
 
     mod = tvm.IRModule.from_expr(func.with_attr("global_symbol", "main"))
     mod = tvm.s_tir.transform.LoopPartition()(mod)
-    stmt = tvm.tir.transform.Simplify()(mod)["main"].body
+    stmt = tvm.tirx.transform.Simplify()(mod)["main"].body
 
-    assert not any(collect_visit(stmt.body[0], lambda x: isinstance(x, tvm.tir.IfThenElse)))
+    assert not any(collect_visit(stmt.body[0], lambda x: isinstance(x, tvm.tirx.IfThenElse)))
 
 
 def test_multi_if():
@@ -65,9 +65,9 @@ def test_multi_if():
 
     mod = tvm.IRModule.from_expr(func.with_attr("global_symbol", "main"))
     mod = tvm.s_tir.transform.LoopPartition()(mod)
-    stmt = tvm.tir.transform.Simplify()(mod)["main"].body
+    stmt = tvm.tirx.transform.Simplify()(mod)["main"].body
 
-    assert not any(collect_visit(stmt.body[0], lambda x: isinstance(x, tvm.tir.IfThenElse)))
+    assert not any(collect_visit(stmt.body[0], lambda x: isinstance(x, tvm.tirx.IfThenElse)))
 
 
 def test_condition():
@@ -79,9 +79,9 @@ def test_condition():
 
     mod = tvm.IRModule.from_expr(func.with_attr("global_symbol", "main"))
     mod = tvm.s_tir.transform.LoopPartition()(mod)
-    stmt = tvm.tir.transform.Simplify()(mod)["main"].body
+    stmt = tvm.tirx.transform.Simplify()(mod)["main"].body
 
-    assert not any(collect_visit(stmt[0], lambda x: isinstance(x, tvm.tir.Select)))
+    assert not any(collect_visit(stmt[0], lambda x: isinstance(x, tvm.tirx.Select)))
 
 
 def test_condition_EQ():
@@ -93,9 +93,9 @@ def test_condition_EQ():
     mod = tvm.IRModule.from_expr(func.with_attr("global_symbol", "main"))
     with tvm.transform.PassContext(config={"s_tir.LoopPartition": {"partition_const_loop": True}}):
         mod = tvm.s_tir.transform.LoopPartition()(mod)
-        stmt = tvm.tir.transform.Simplify()(mod)["main"].body
+        stmt = tvm.tirx.transform.Simplify()(mod)["main"].body
 
-    assert not any(collect_visit(stmt[0], lambda x: isinstance(x, tvm.tir.Select)))
+    assert not any(collect_visit(stmt[0], lambda x: isinstance(x, tvm.tirx.Select)))
 
 
 def test_everything_during_deduction():
@@ -109,9 +109,9 @@ def test_everything_during_deduction():
 
     mod = tvm.IRModule.from_expr(func.with_attr("global_symbol", "main"))
     mod = tvm.s_tir.transform.LoopPartition()(mod)
-    stmt = tvm.tir.transform.Simplify()(mod)["main"].body
+    stmt = tvm.tirx.transform.Simplify()(mod)["main"].body
 
-    assert isinstance(stmt.body.body, tvm.tir.IfThenElse)
+    assert isinstance(stmt.body.body, tvm.tirx.IfThenElse)
 
 
 def test_oneD_pool():
@@ -139,9 +139,9 @@ def test_oneD_pool():
 
     with tvm.transform.PassContext(config={"s_tir.LoopPartition": {"partition_const_loop": True}}):
         mod = tvm.s_tir.transform.LoopPartition()(mod)
-        stmt = tvm.tir.transform.Simplify()(mod)["main"].body
+        stmt = tvm.tirx.transform.Simplify()(mod)["main"].body
 
-    assert not any(collect_visit(stmt, lambda x: isinstance(x, tvm.tir.IfThenElse)))
+    assert not any(collect_visit(stmt, lambda x: isinstance(x, tvm.tirx.IfThenElse)))
 
 
 def test_cce_loop_1():
@@ -160,9 +160,9 @@ def test_cce_loop_1():
     mod = tvm.IRModule.from_expr(func.with_attr("global_symbol", "main"))
     with tvm.transform.PassContext(config={"s_tir.LoopPartition": {"partition_const_loop": True}}):
         mod = tvm.s_tir.transform.LoopPartition()(mod)
-        stmt = tvm.tir.transform.Simplify()(mod)["main"].body
+        stmt = tvm.tirx.transform.Simplify()(mod)["main"].body
 
-    assert not any(collect_visit(stmt, lambda x: isinstance(x, tvm.tir.IfThenElse)))
+    assert not any(collect_visit(stmt, lambda x: isinstance(x, tvm.tirx.IfThenElse)))
 
 
 def test_cce_loop_2():
@@ -181,9 +181,9 @@ def test_cce_loop_2():
     mod = tvm.IRModule.from_expr(func.with_attr("global_symbol", "main"))
     with tvm.transform.PassContext(config={"s_tir.LoopPartition": {"partition_const_loop": True}}):
         mod = tvm.s_tir.transform.LoopPartition()(mod)
-        stmt = tvm.tir.transform.Simplify()(mod)["main"].body
+        stmt = tvm.tirx.transform.Simplify()(mod)["main"].body
 
-    assert not any(collect_visit(stmt, lambda x: isinstance(x, tvm.tir.IfThenElse)))
+    assert not any(collect_visit(stmt, lambda x: isinstance(x, tvm.tirx.IfThenElse)))
 
 
 def test_cce_loop_3():
@@ -202,16 +202,16 @@ def test_cce_loop_3():
 
     with tvm.transform.PassContext(config={"s_tir.LoopPartition": {"partition_const_loop": True}}):
         mod = tvm.s_tir.transform.LoopPartition()(mod)
-        stmt = tvm.tir.transform.Simplify()(mod)["main"].body
+        stmt = tvm.tirx.transform.Simplify()(mod)["main"].body
 
-    assert not any(collect_visit(stmt, lambda x: isinstance(x, tvm.tir.IfThenElse)))
+    assert not any(collect_visit(stmt, lambda x: isinstance(x, tvm.tirx.IfThenElse)))
 
 
 @T.prim_func
 def partitioned_concat(
     A: T.Buffer((16,), "float32"), B: T.Buffer((16,), "float32"), C: T.Buffer((32,), "float32")
 ) -> None:
-    T.func_attr({"global_symbol": "main", "tir.noalias": True})
+    T.func_attr({"global_symbol": "main", "tirx.noalias": True})
     for i in T.serial(0, 16):
         C[i] = A[i]
     for i in T.serial(0, 16):
@@ -223,10 +223,10 @@ def partition_from_scheduled_tir(prim_func, pass_cfg, do_flatten=True):
         mod = IRModule.from_expr(prim_func.with_attr("global_symbol", "main"))
         mod = tvm.s_tir.transform.LowerOpaqueBlock()(mod)
         if do_flatten:
-            mod = tvm.tir.transform.FlattenBuffer()(mod)
+            mod = tvm.tirx.transform.FlattenBuffer()(mod)
         mod = tvm.s_tir.transform.LoopPartition()(mod)
-        mod = tvm.tir.transform.Simplify()(mod)
-        mod = tvm.tir.transform.RemoveNoOp()(mod)
+        mod = tvm.tirx.transform.Simplify()(mod)
+        mod = tvm.tirx.transform.RemoveNoOp()(mod)
         return mod
 
 
@@ -327,9 +327,9 @@ def test_loop_partition_unroll_hint():
             }
         },
     )
-    mod = tvm.tir.transform.UnrollLoop()(mod)
-    mod = tvm.tir.transform.RemoveNoOp()(mod)
-    mod = tvm.tir.transform.Simplify()(mod)
+    mod = tvm.tirx.transform.UnrollLoop()(mod)
+    mod = tvm.tirx.transform.RemoveNoOp()(mod)
+    mod = tvm.tirx.transform.Simplify()(mod)
     tvm.ir.assert_structural_equal(mod["main"], partitioned_main.with_attr("global_symbol", "main"))
 
 
@@ -361,32 +361,28 @@ def test_loop_partition_recursive_unroll_hint():
 
     @T.prim_func
     def partitioned_main():
-        placeholder_0_dm = T.allocate([16384], "int8", "global")
-        placeholder_0_dm_1 = T.decl_buffer([16384], dtype="int8", data=placeholder_0_dm)
+        placeholder_0_dm = T.decl_buffer((16384,), "int8")
         for i3_0 in T.unroll(2):
             for i2_0 in T.unroll(2):
-                pad_temp = T.allocate([4096], "int8", "global")
-                pad_temp_1 = T.decl_buffer([4096], dtype="int8", data=pad_temp)
+                pad_temp = T.decl_buffer((4096,), "int8")
                 for ax0, ax1, ax2 in T.grid(16, 16, 16):
                     if 6 <= i2_0 * 4 + ax0 and 6 <= i3_0 * 4 + ax1:
-                        pad_temp_1[ax0 * 256 + ax1 * 16 + ax2] = placeholder_0_dm_1[
+                        pad_temp[ax0 * 256 + ax1 * 16 + ax2] = placeholder_0_dm[
                             i2_0 * 2048 + ax0 * 512 + i3_0 * 64 + ax1 * 16 + ax2
                         ]
         for i2_0 in T.unroll(2):
-            pad_temp_2 = T.allocate([4096], "int8", "global")
-            pad_temp_3 = T.decl_buffer([4096], dtype="int8", data=pad_temp_2)
+            pad_temp = T.decl_buffer((4096,), "int8")
             for ax0, ax1, ax2 in T.grid(16, 16, 16):
                 if 6 <= i2_0 * 4 + ax0:
-                    pad_temp_3[ax0 * 256 + ax1 * 16 + ax2] = placeholder_0_dm_1[
+                    pad_temp[ax0 * 256 + ax1 * 16 + ax2] = placeholder_0_dm[
                         i2_0 * 2048 + ax0 * 512 + ax1 * 16 + ax2 + 128
                     ]
         for i3_0 in T.unroll(2):
             for i2_0 in T.unroll(2):
-                pad_temp_4 = T.allocate([4096], "int8", "global")
-                pad_temp_5 = T.decl_buffer([4096], dtype="int8", data=pad_temp_4)
+                pad_temp = T.decl_buffer((4096,), "int8")
                 for ax0, ax1, ax2 in T.grid(16, 16, 16):
                     if 6 <= i2_0 * 4 + ax0 and i3_0 * 4 + ax1 < 14:
-                        pad_temp_5[ax0 * 256 + ax1 * 16 + ax2] = placeholder_0_dm_1[
+                        pad_temp[ax0 * 256 + ax1 * 16 + ax2] = placeholder_0_dm[
                             i2_0 * 2048 + ax0 * 512 + i3_0 * 64 + ax1 * 16 + ax2 + 192
                         ]
 
@@ -471,12 +467,13 @@ def test_loop_partition_with_unit_loop_in_condition():
         placeholder_1_1 = T.decl_buffer((25088,), "int8", data=placeholder_1.data)
         placeholder_2_1 = T.decl_buffer((25088,), "int8", data=placeholder_2.data)
         T_concat_1 = T.decl_buffer((100352,), "int8", data=T_concat.data)
-        for _ in T.serial(1, annotations={"preserve_unit_loop": True}):
+        for k in T.serial(1, annotations={"preserve_unit_loop": True}):
             for i1, i2, i3 in T.grid(64, 28, 28):
                 T_concat_1[i1 * 784 + i2 * 28 + i3] = placeholder_3[i1 * 784 + i2 * 28 + i3]
             for i1, i2, i3 in T.grid(32, 28, 28):
-                idx = i1 * 784 + i2 * 28 + i3
-                T_concat_1[idx + 50176] = placeholder_1_1[idx]
+                T_concat_1[i1 * 784 + i2 * 28 + i3 + 50176] = placeholder_1_1[
+                    i1 * 784 + i2 * 28 + i3
+                ]
             for i1, i2, i3 in T.grid(32, 28, 28):
                 T_concat_1[i2 * 28 + i3] = placeholder_2_1[i1 * 784 + i2 * 28 + i3]
 

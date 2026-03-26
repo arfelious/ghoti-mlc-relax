@@ -19,14 +19,14 @@
 
 #include <tvm/ffi/reflection/registry.h>
 #include <tvm/s_tir/transform.h>
-#include <tvm/tir/builtin.h>
-#include <tvm/tir/stmt.h>
+#include <tvm/tirx/builtin.h>
+#include <tvm/tirx/stmt.h>
 
 #include "../../arith/ir_visitor_with_analyzer.h"
 
 namespace tvm {
 namespace s_tir {
-using namespace tvm::tir;
+using namespace tvm::tirx;
 
 inline bool IsVtcmStorage(std::string scope) {
   return scope.find("global.vtcm") != std::string::npos;
@@ -37,16 +37,15 @@ class VtcmAllocator : public StmtExprMutator {
   using StmtExprMutator::VisitStmt_;
   VtcmAllocator() {}
 
-  Stmt VisitStmt_(const AllocateNode* op) final {
-    std::string storage_scope = GetStorageScope(op->buffer_var);
+  Stmt VisitStmt_(const AllocBufferNode* op) final {
+    std::string storage_scope = GetStorageScope(op->buffer->data);
     if (IsVtcmStorage(storage_scope)) {
-      Stmt body = this->VisitStmt(op->body);
       ffi::Array<PrimExpr> args;
       args.push_back(StringImm(storage_scope));
-      args.push_back(IntImm(DataType::Int(64), op->extents.size()));
-      args.push_back(Call(DataType::Handle(), builtin::tvm_stack_make_shape(), op->extents));
-      return LetStmt(op->buffer_var,
-                     Call(op->buffer_var.dtype(), builtin::nd_mem_alloc_with_scope(), args), body);
+      args.push_back(IntImm(DataType::Int(64), op->buffer->shape.size()));
+      args.push_back(Call(DataType::Handle(), builtin::tvm_stack_make_shape(), op->buffer->shape));
+      return Bind(op->buffer->data,
+                  Call(op->buffer->data.dtype(), builtin::nd_mem_alloc_with_scope(), args));
     }
     return StmtExprMutator::VisitStmt_(op);
   }

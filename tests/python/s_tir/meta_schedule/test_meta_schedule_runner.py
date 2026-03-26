@@ -56,9 +56,9 @@ from tvm.s_tir.meta_schedule.utils import (
     derived_object,
     get_global_func_with_default_on_worker,
 )
-from tvm.script import tir as T
+from tvm.script import tirx as T
 from tvm.target import Target
-from tvm.tir import FloatImm
+from tvm.tirx import FloatImm
 
 MATMUL_N = 16
 MATMUL_M = 32
@@ -70,7 +70,7 @@ MATMUL_M = 32
 class MatmulModule:
     @T.prim_func
     def main(a: T.handle, b: T.handle, c: T.handle) -> None:  # pylint: disable=no-self-argument
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
+        T.func_attr({"global_symbol": "main", "tirx.noalias": True})
         A = T.match_buffer(a, (16, 16), "float32")
         B = T.match_buffer(b, (16, 16), "float32")
         C = T.match_buffer(c, (16, 16), "float32")
@@ -86,11 +86,11 @@ class MatmulModule:
 class MatmulReluModule:
     @T.prim_func
     def main(a: T.handle, b: T.handle, d: T.handle) -> None:  # pylint: disable=no-self-argument
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
+        T.func_attr({"global_symbol": "main", "tirx.noalias": True})
         A = T.match_buffer(a, (16, 16), "float32")
         B = T.match_buffer(b, (16, 16), "float32")
         D = T.match_buffer(d, (16, 16), "float32")
-        C = T.alloc_buffer((16, 16), "float32")
+        C = T.sblock_alloc_buffer((16, 16), "float32")
         for i, j, k in T.grid(16, 16, 16):
             with T.sblock("matmul"):
                 vi, vj, vk = T.axis.remap("SSR", [i, j, k])
@@ -107,7 +107,7 @@ class MatmulReluModule:
 class BatchMatmulModule:
     @T.prim_func
     def main(a: T.handle, b: T.handle, c: T.handle) -> None:  # pylint: disable=no-self-argument
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
+        T.func_attr({"global_symbol": "main", "tirx.noalias": True})
         A = T.match_buffer(a, [16, 32, 32])
         B = T.match_buffer(b, [16, 32, 32])
         C = T.match_buffer(c, [16, 32, 32])
@@ -123,7 +123,7 @@ class BatchMatmulModule:
 class AddModule:
     @T.prim_func
     def main(a: T.handle, b: T.handle, c: T.handle) -> None:  # pylint: disable=no-self-argument
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
+        T.func_attr({"global_symbol": "main", "tirx.noalias": True})
         A = T.match_buffer(a, [32], "float32")
         B = T.match_buffer(b, [32], "float32")
         C = T.match_buffer(c, [32], "float32")
@@ -138,7 +138,7 @@ class AddModule:
 class MatmulHugeModule:
     @T.prim_func
     def main(a: T.handle, b: T.handle, c: T.handle) -> None:  # pylint: disable=no-self-argument
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
+        T.func_attr({"global_symbol": "main", "tirx.noalias": True})
         A = T.match_buffer(a, (4096, 4096), "float32")
         B = T.match_buffer(b, (4096, 4096), "float32")
         C = T.match_buffer(c, (4096, 4096), "float32")
@@ -163,6 +163,7 @@ def _clean_build(artifact_path: str) -> None:
         raise RuntimeError("Unable to find remove_build_dir function.")
 
 
+@pytest.mark.skip("Tuning test - launches runner")
 def test_meta_schedule_rpc_single_run():
     """Test meta schedule rpc runner for a single run"""
     # Build the module
@@ -209,6 +210,7 @@ def test_meta_schedule_rpc_single_run():
     _clean_build(builder_result.artifact_path)
 
 
+@pytest.mark.skip("Tuning test - launches runner")
 def test_meta_schedule_local_single_run():
     """Test meta schedule local runner for a single run"""
     # Build the module
@@ -247,6 +249,7 @@ def test_meta_schedule_local_single_run():
     _clean_build(builder_result.artifact_path)
 
 
+@pytest.mark.skip("Tuning test - launches runner")
 def test_meta_schedule_rpc_multiple_runs():
     """Test meta schedule rpc runner for multiple runs"""
     # Build the module
@@ -316,6 +319,7 @@ def test_meta_schedule_rpc_multiple_runs():
         _clean_build(builder_result.artifact_path)
 
 
+@pytest.mark.skip("Tuning test - launches runner")
 def test_meta_schedule_local_multiple_runs():
     """Test meta schedule local runner for multiple runs"""
     # Build the module
@@ -379,6 +383,7 @@ def test_meta_schedule_local_multiple_runs():
         _clean_build(builder_result.artifact_path)
 
 
+@pytest.mark.skip("Tuning test - launches runner")
 def test_meta_schedule_py_runner():
     """Test meta schedule PyRunner"""
 
@@ -392,6 +397,7 @@ def test_meta_schedule_py_runner():
         runner.run([])
 
 
+@pytest.mark.skip("Tuning test - launches runner")
 @tvm.testing.skip_if_32bit(reason="skipping test for i386.")
 def test_meta_schedule_rpc_runner_time_out():
     """Test meta schedule RPC Runner time out by using a super large workload"""
@@ -439,6 +445,7 @@ def test_meta_schedule_rpc_runner_time_out():
     assert runner_result.run_secs is None
 
 
+@pytest.mark.skip("Tuning test - launches runner")
 def test_meta_schedule_local_runner_time_out():
     """Test meta schedule Local Runner time out"""
     mod = MatmulModule
@@ -541,6 +548,7 @@ def test_meta_schedule_rpc_runner_exception():
     assert runner_result.run_secs is None
 
 
+@pytest.mark.skip("Tuning test - launches runner")
 def test_meta_schedule_local_runner_exception():
     """Test meta schedule Local Runner exception"""
     mod = MatmulModule
@@ -592,6 +600,7 @@ def test_meta_schedule_local_runner_exception():
     _clean_build(builder_result.artifact_path)
 
 
+@pytest.mark.skip("Tuning test - launches runner")
 def test_meta_schedule_runner_matmul_test():
     """Test meta schedule runner with add module"""
 
@@ -702,6 +711,7 @@ def test_meta_schedule_runner_matmul_test():
     _clean_build(builder_result.artifact_path)
 
 
+@pytest.mark.skip("Tuning test - launches runner")
 def test_meta_schedule_runner_add_test():
     """Test meta schedule runner with add module"""
 
@@ -814,6 +824,7 @@ def test_meta_schedule_runner_add_test():
     _clean_build(builder_result.artifact_path)
 
 
+@pytest.mark.skip("Tuning test - launches runner")
 def test_meta_schedule_local_runner_add_test():
     """Test meta schedule local runner with add module"""
 

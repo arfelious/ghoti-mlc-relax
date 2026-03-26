@@ -25,16 +25,16 @@
 #include <tvm/arith/analyzer.h>
 #include <tvm/ffi/reflection/registry.h>
 #include <tvm/s_tir/transform.h>
-#include <tvm/tir/function.h>
-#include <tvm/tir/op.h>
-#include <tvm/tir/stmt_functor.h>
+#include <tvm/tirx/function.h>
+#include <tvm/tirx/op.h>
+#include <tvm/tirx/stmt_functor.h>
 
-#include "../../tir/ir/functor_common.h"
-#include "../../tir/transform/ir_utils.h"
+#include "../../tirx/ir/functor_common.h"
+#include "../../tirx/transform/ir_utils.h"
 
 namespace tvm {
 namespace s_tir {
-using namespace tvm::tir;
+using namespace tvm::tirx;
 class MatchBufferLower : public StmtExprMutator {
  public:
   explicit MatchBufferLower(const PrimFunc& func) {
@@ -49,8 +49,25 @@ class MatchBufferLower : public StmtExprMutator {
     for (const MatchBufferRegion& match_buffer : op->match_buffers) {
       CheckAndUpdateVarMap(match_buffer);
     }
-
+    // After CheckAndUpdateVarMap sets up match_buffers_ and var_map_,
+    // the base class visit may remap buffer objects via VisitBufferDef
+    // (e.g., remapping elem_offset). We need match_buffers_ to also
+    // contain the remapped buffer keys for lookups in the body.
+    // Snapshot current match_buffers_ keys before base visit.
+    std::vector<Buffer> orig_buffers;
+    for (const auto& kv : match_buffers_) {
+      orig_buffers.push_back(kv.first);
+    }
     Stmt stmt = StmtExprMutator ::VisitStmt_(op);
+    // Add remapped buffer keys to match_buffers_
+    for (const Buffer& orig_buf : orig_buffers) {
+      if (auto remap_it = buffer_remap_.find(orig_buf); remap_it != buffer_remap_.end()) {
+        Buffer remapped = (*remap_it).second;
+        if (!match_buffers_.count(remapped)) {
+          match_buffers_.Set(remapped, match_buffers_[orig_buf]);
+        }
+      }
+    }
     op = stmt.as<SBlockNode>();
     TVM_FFI_ICHECK(op != nullptr);
     ffi::Array<BufferRegion> reads =
@@ -85,11 +102,14 @@ class MatchBufferLower : public StmtExprMutator {
   }
 
   Stmt VisitStmt_(const BufferStoreNode* op) final {
+    // Save the original buffer before base class mutation may remap it
+    Buffer orig_buffer = op->buffer;
     Stmt stmt = StmtExprMutator::VisitStmt_(op);
     op = stmt.as<BufferStoreNode>();
     TVM_FFI_ICHECK(op != nullptr);
 
-    auto it = match_buffers_.find(op->buffer);
+    // Look up using original buffer (before VisitBufferDef may have remapped it)
+    auto it = match_buffers_.find(orig_buffer);
     if (it == match_buffers_.end()) {
       return stmt;
     } else {
@@ -106,11 +126,13 @@ class MatchBufferLower : public StmtExprMutator {
   }
 
   PrimExpr VisitExpr_(const BufferLoadNode* op) final {
+    // Save the original buffer before base class mutation may remap it
+    Buffer orig_buffer = op->buffer;
     PrimExpr expr = StmtExprMutator::VisitExpr_(op);
     op = expr.as<BufferLoadNode>();
     TVM_FFI_ICHECK(op != nullptr);
 
-    auto it = match_buffers_.find(op->buffer);
+    auto it = match_buffers_.find(orig_buffer);
     if (it == match_buffers_.end()) {
       return expr;
     } else {

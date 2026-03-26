@@ -22,7 +22,7 @@ import numpy as np
 import pytest
 
 import tvm
-from tvm.script import tir as T
+from tvm.script import tirx as T
 
 VRMPY_SIZE_B = 128
 VRMPY_SIZE_INT32 = 32
@@ -43,15 +43,15 @@ def conv2d_async_non_contig(
     """Non contiguous memory access is used in this conv2d taken from MS."""
     # pylint: disable=no-self-argument
     # function attr dict
-    T.func_attr({"tir.noalias": True, "global_symbol": "main"})
+    T.func_attr({"tirx.noalias": True, "global_symbol": "main"})
     # body
     # with T.sblock("root")
-    p0_global_vtcm = T.alloc_buffer(
+    p0_global_vtcm = T.sblock_alloc_buffer(
         [T.int64(1), T.int64(1), T.int64(56), T.int64(56), T.int64(4)],
         dtype="uint8",
         scope="global.vtcm",
     )
-    fused_constant_global_vtcm = T.alloc_buffer(
+    fused_constant_global_vtcm = T.sblock_alloc_buffer(
         [T.int64(1), T.int64(1), T.int64(3), T.int64(3), T.int64(1), T.int64(32), T.int64(4)],
         dtype="uint8",
         scope="global.vtcm",
@@ -223,7 +223,7 @@ def conv_approximation(size_a, size_w):
 
     @T.prim_func
     def operator(a_input: T.handle, b_input: T.handle, c_output: T.handle) -> None:
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
+        T.func_attr({"global_symbol": "main", "tirx.noalias": True})
         a_buffer = T.match_buffer(a_input, a_shape, dtype="uint8")
         w_buffer = T.match_buffer(b_input, w_shape, dtype="uint8")
         c_buffer = T.match_buffer(c_output, out_shape, dtype="int32")
@@ -274,8 +274,8 @@ def evaluate(
     target_hexagon = tvm.target.Target("qcom/hexagon-v68")
     with tvm.transform.PassContext(
         config={
-            "tir.use_async_copy": use_async_copy,
-            "tir.experimental_dma_bypass_cache": 1,
+            "tirx.use_async_copy": use_async_copy,
+            "tirx.experimental_dma_bypass_cache": 1,
         }
     ):
         func_tir = tvm.compile(
@@ -528,7 +528,7 @@ class TestAsyncDMAPipeline:
         )
 
 
-# from tvm.script import tir as T
+# from tvm.script import tirx as T
 @tvm.script.ir_module
 class ModulePipelined:
     """Pipelined module class."""
@@ -542,12 +542,18 @@ class ModulePipelined:
     ) -> None:
         # pylint: disable=missing-function-docstring
         # function attr dict
-        T.func_attr({"tir.noalias": True, "global_symbol": "main"})
+        T.func_attr({"tirx.noalias": True, "global_symbol": "main"})
         # body
         # with T.sblock("root")
-        conv2d_nchwc_int8 = T.alloc_buffer([1, 2, 112, 112, 32], dtype="int32", scope="global.vtcm")
-        p0_global_vtcm = T.alloc_buffer([1, 1, 230, 230, 4], dtype="uint8", scope="global.vtcm")
-        p1_global_vtcm = T.alloc_buffer([2, 1, 7, 7, 1, 32, 4], dtype="int8", scope="global.vtcm")
+        conv2d_nchwc_int8 = T.sblock_alloc_buffer(
+            [1, 2, 112, 112, 32], dtype="int32", scope="global.vtcm"
+        )
+        p0_global_vtcm = T.sblock_alloc_buffer(
+            [1, 1, 230, 230, 4], dtype="uint8", scope="global.vtcm"
+        )
+        p1_global_vtcm = T.sblock_alloc_buffer(
+            [2, 1, 7, 7, 1, 32, 4], dtype="int8", scope="global.vtcm"
+        )
         for ax0, ax1, ax2, ax3, ax4, ax5, ax6 in T.grid(2, 1, 7, 7, 1, 32, 4):
             with T.sblock("p1_global.vtcm"):
                 v0_ind, v1_ind, v2_ind, v3_ind, v4_ind, v5_ind, v6_ind = T.axis.remap(
@@ -679,7 +685,7 @@ class ModulePipelined:
                     ]
 
 
-# from tvm.script import tir as T
+# from tvm.script import tirx as T
 @tvm.script.ir_module
 class ModuleBase:
     """Base module test class."""
@@ -693,11 +699,11 @@ class ModuleBase:
     ) -> None:
         # pylint: disable=missing-function-docstring
         # function attr dict
-        T.func_attr({"tir.noalias": True, "global_symbol": "main"})
+        T.func_attr({"tirx.noalias": True, "global_symbol": "main"})
         # buffer definition
         # body
         # with T.sblock("root")
-        conv2d_nchwc_int8 = T.alloc_buffer([1, 2, 112, 112, 32], dtype="int32")
+        conv2d_nchwc_int8 = T.sblock_alloc_buffer([1, 2, 112, 112, 32], dtype="int32")
         for i0_0_i1_0_i2_0_i3_0_fused in T.parallel(
             112, annotations={"pragma_auto_unroll_max_step": 64, "pragma_unroll_explicit": 1}
         ):

@@ -22,10 +22,10 @@ import pytest
 
 import tvm
 import tvm.testing
-from tvm import tir
+from tvm import tirx
 from tvm.ir.diagnostics import override_renderer
 from tvm.script import from_source
-from tvm.script import tir as T
+from tvm.script import tirx as T
 
 
 def check_error(func, rel_lineno):
@@ -138,14 +138,6 @@ def test_no_body():
     check_error(no_body, 3)
 
 
-def test_allocate_with_buffers():
-    def allocate_with_buffers() -> None:
-        with T.allocate([1], "float32", "") as [A, B]:  # error
-            T.evaluate(1.0)
-
-    check_error(allocate_with_buffers, 2)
-
-
 def test_inconsistent_binding():
     def inconsistent_binding_value() -> None:
         for i, j in T.grid(16, 16):
@@ -246,15 +238,15 @@ def test_invalid_match_buffer_region():
 
 def test_duplicate_buffer():
     def duplicate_buffer() -> None:
-        A = T.alloc_buffer((128, 128), "float32")
-        A = T.alloc_buffer((128, 128), "float32")  # error
+        A = T.sblock_alloc_buffer((128, 128), "float32")
+        A = T.sblock_alloc_buffer((128, 128), "float32")  # error
 
     check_error(duplicate_buffer, 3)
 
 
 def test_duplicate_block_signature():
     def duplicate_reads() -> None:
-        A = T.alloc_buffer((128, 128), "float32")
+        A = T.sblock_alloc_buffer((128, 128), "float32")
         for i, j in T.grid(128, 128):
             with T.sblock():
                 vi, vj = T.axis.remap("SS", [i, j])
@@ -263,7 +255,7 @@ def test_duplicate_block_signature():
                 T.evaluate(1.0)
 
     def duplicate_writes() -> None:
-        A = T.alloc_buffer((128, 128), "float32")
+        A = T.sblock_alloc_buffer((128, 128), "float32")
         for i, j in T.grid(128, 128):
             with T.sblock():
                 vi, vj = T.axis.remap("SS", [i, j])
@@ -322,7 +314,7 @@ def test_opaque_access_during_complete():
 
 def test_convert_slice_to_bufferload():
     def convert_slice_to_bufferload() -> None:
-        A = T.alloc_buffer((128, 128), "float32")
+        A = T.sblock_alloc_buffer((128, 128), "float32")
         for i, j in T.grid(128, 128):
             with T.sblock():
                 vi, vj = T.axis.remap("SS", [i, j])
@@ -333,7 +325,7 @@ def test_convert_slice_to_bufferload():
 
 def test_tvm_exception_catch_from_special_stmt():
     def special_stmt_except() -> None:
-        A = T.alloc_buffer("(128, 128)", "float32")  # error
+        A = T.sblock_alloc_buffer("(128, 128)", "float32")  # error
         T.evaluate(1.0)
 
     check_error(special_stmt_except, 2)
@@ -382,7 +374,7 @@ def test_match_buffer_shape_mismatch():
 def test_high_dim_store():
     def high_dim_store() -> None:
         with T.sblock("root"):
-            B = T.allocate([256], "float32", "global")
+            B = T.alloc_buffer((256,), "float32")
             for i, j in T.grid(16, 16):
                 B[i, j] = 1.0  # error: Store is only allowed with one index
 
@@ -439,7 +431,7 @@ def elementwise_not_affine(a: T.handle, b: T.handle) -> None:
 @T.prim_func
 def elementwise_non_single_branch(a: T.handle, b: T.handle) -> None:
     A = T.match_buffer(a, (128, 128, 128))
-    C = T.alloc_buffer((128, 128, 128))
+    C = T.sblock_alloc_buffer((128, 128, 128))
     B = T.match_buffer(b, (128, 128, 128))
     for i, j in T.grid(128, 128):
         for k in T.serial(0, 128):
@@ -459,7 +451,7 @@ def test_reorder_fail_block():
     with pytest.raises(tvm.s_tir.ScheduleError) as execinfo:
         sch.reorder(l, i)
     expected_sub_error_message = (
-        "                            # tir.SBlock#0\n"
+        "                            # tirx.SBlock#0\n"
         '                            with T.sblock("B"):\n'
         "                            ^^^^^^^^^^^^^^^^^^^\n"
     )
@@ -474,7 +466,7 @@ def test_reorder_fail_nested_loop_inner():
         sch.reorder(k, i)
     expected_sub_error_message = (
         "            for i in range(128):\n"
-        "                # tir.For#0\n"
+        "                # tirx.For#0\n"
         "                for j in range(128):\n"
         "                ^^^^^^^^^^^^^^^^^^^^\n"
     )
@@ -488,7 +480,7 @@ def test_fuse_fail_nested_loop_outer():
     with pytest.raises(tvm.s_tir.ScheduleError) as execinfo:
         sch.fuse(k, i)
     expected_sub_error_message = (
-        "            # tir.For#1\n"
+        "            # tirx.For#1\n"
         "            for i in range(128):\n"
         "            ^^^^^^^^^^^^^^^^^^^^\n"
         "                for j in range(128):\n"
@@ -502,7 +494,7 @@ def test_report_error_root_block():
     with pytest.raises(tvm.s_tir.ScheduleError) as execinfo:
         sch.compute_inline(root)
     expected_sub_error_message = (
-        '        # tir.SBlock#0\n        with T.sblock("root"):\n        ^^^^^^^^^^^^^^^^^^^^^^\n'
+        '        # tirx.SBlock#0\n        with T.sblock("root"):\n        ^^^^^^^^^^^^^^^^^^^^^^\n'
     )
     assert expected_sub_error_message in str(execinfo.value)
 

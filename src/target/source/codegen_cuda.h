@@ -25,8 +25,8 @@
 #define TVM_TARGET_SOURCE_CODEGEN_CUDA_H_
 
 #include <tvm/target/codegen.h>
-#include <tvm/tir/expr.h>
-#include <tvm/tir/op.h>
+#include <tvm/tirx/expr.h>
+#include <tvm/tirx/op.h>
 
 #include <string>
 #include <unordered_map>
@@ -70,7 +70,7 @@ class CodeGenCUDA final : public CodeGenC {
   void VisitExpr_(const CallNode* op, std::ostream& os) final;
   void VisitExpr_(const CastNode* op, std::ostream& os) final;
   void VisitStmt_(const EvaluateNode* op) final;
-  void VisitStmt_(const AllocateNode* op) final;
+  void VisitStmt_(const AllocBufferNode* op) final;
   void VisitStmt_(const AttrStmtNode* op) final;
 
  protected:

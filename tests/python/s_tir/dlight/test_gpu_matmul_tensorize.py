@@ -19,7 +19,7 @@
 import tvm
 import tvm.testing
 from tvm.s_tir import dlight as dl
-from tvm.script import tir as T
+from tvm.script import tirx as T
 from tvm.target import Target
 
 import pytest
@@ -29,7 +29,7 @@ import pytest
 def test_matmul_tensorize():
     @T.prim_func(private=True)
     def before(X: T.Buffer((256, 256), "float16"), W: T.Buffer((256, 256), "float16"), compute: T.Buffer((256, 256), "float16")):
-        T.func_attr({"tir.noalias": True})
+        T.func_attr({"tirx.noalias": True})
         # with T.sblock("root"):
         for i, j, k in T.grid(256, 256, 256):
             with T.sblock("compute"):
@@ -42,14 +42,14 @@ def test_matmul_tensorize():
 
     @T.prim_func(private=True)
     def expected(X: T.Buffer((256, 256), "float16"), W: T.Buffer((256, 256), "float16"), compute: T.Buffer((256, 256), "float16")):
-        T.func_attr({"tir.is_scheduled": True, "tir.noalias": True})
+        T.func_attr({"tirx.is_scheduled": True, "tirx.noalias": True})
         # with T.sblock("root"):
-        X_reindex_shared_dyn = T.alloc_buffer((1, 256, 256), "float16", scope="shared.dyn")
-        W_reindex_shared_dyn = T.alloc_buffer((1, 256, 256), "float16", scope="shared.dyn")
-        X_reindex_shared_dyn_wmma_matrix_a = T.alloc_buffer((1, 256, 256), "float16", scope="wmma.matrix_a")
-        W_reindex_shared_dyn_wmma_matrix_b = T.alloc_buffer((1, 256, 256), "float16", scope="wmma.matrix_b")
-        compute_reindex_shared_dyn = T.alloc_buffer((1, 256, 256), "float16", scope="shared.dyn")
-        compute_reindex_shared_dyn_wmma_accumulator = T.alloc_buffer((1, 256, 256), "float16", scope="wmma.accumulator")
+        X_reindex_shared_dyn = T.sblock_alloc_buffer((1, 256, 256), "float16", scope="shared.dyn")
+        W_reindex_shared_dyn = T.sblock_alloc_buffer((1, 256, 256), "float16", scope="shared.dyn")
+        X_reindex_shared_dyn_wmma_matrix_a = T.sblock_alloc_buffer((1, 256, 256), "float16", scope="wmma.matrix_a")
+        W_reindex_shared_dyn_wmma_matrix_b = T.sblock_alloc_buffer((1, 256, 256), "float16", scope="wmma.matrix_b")
+        compute_reindex_shared_dyn = T.sblock_alloc_buffer((1, 256, 256), "float16", scope="shared.dyn")
+        compute_reindex_shared_dyn_wmma_accumulator = T.sblock_alloc_buffer((1, 256, 256), "float16", scope="wmma.accumulator")
         for ax0 in T.thread_binding(1, thread="blockIdx.z"):
             for ax1_0_0_ax2_0_0_fused in T.thread_binding(2, thread="blockIdx.x"):
                 for ax1_0_1_ax2_0_1_fused in T.thread_binding(2, thread="blockIdx.y"):
@@ -79,7 +79,7 @@ def test_matmul_tensorize():
                                                 v2 = T.axis.spatial(256, ax3_0_0 * 64 + (ax0_ax1_fused_0 * 2048 + ax0_ax1_fused_1 * 128 + ax0_ax1_fused_2 * 4 + ax0_ax1_fused_3) % 64)
                                                 T.reads(X[v1, v2])
                                                 T.writes(X_reindex_shared_dyn[v0, v1, v2])
-                                                T.sblock_attr({"buffer_dim_align": [[0, 1, 16, 8]], "double_buffer_scope": 0, "tir.manifest_shared_memory_local_stage": 1})
+                                                T.sblock_attr({"buffer_dim_align": [[0, 1, 16, 8]], "double_buffer_scope": 0, "tirx.manifest_shared_memory_local_stage": 1})
                                                 X_reindex_shared_dyn[v0, v1, v2] = X[v1, v2]
                             for ax0_ax1_fused_0 in range(4):
                                 for ax0_ax1_fused_1 in T.thread_binding(16, thread="threadIdx.y"):
@@ -91,7 +91,7 @@ def test_matmul_tensorize():
                                                 v2 = T.axis.spatial(256, ax3_0_0 * 64 + (ax0_ax1_fused_0 * 2048 + ax0_ax1_fused_1 * 128 + ax0_ax1_fused_2 * 4 + ax0_ax1_fused_3) % 64)
                                                 T.reads(W[v1, v2])
                                                 T.writes(W_reindex_shared_dyn[v0, v1, v2])
-                                                T.sblock_attr({"buffer_dim_align": [[0, 1, 16, 8]], "double_buffer_scope": 0, "tir.manifest_shared_memory_local_stage": 1})
+                                                T.sblock_attr({"buffer_dim_align": [[0, 1, 16, 8]], "double_buffer_scope": 0, "tirx.manifest_shared_memory_local_stage": 1})
                                                 W_reindex_shared_dyn[v0, v1, v2] = W[v1, v2]
                             for ax3_0_1 in range(4, annotations={"software_pipeline_order": [0, 1, 2], "software_pipeline_stage": [0, 0, 1]}):
                                 for ax0_0 in T.unroll(2):
@@ -168,7 +168,7 @@ def test_matmul_tensorize_too_small():
     # fmt: off
     @T.prim_func(private=True)
     def before(var_X: T.handle, W: T.Buffer((15, 256), "float16"), var_compute: T.handle):
-        T.func_attr({"tir.noalias": True})
+        T.func_attr({"tirx.noalias": True})
         m = T.int32()
         X = T.match_buffer(var_X, (m, 256), "float16")
         compute = T.match_buffer(var_compute, (m, 15))
@@ -184,14 +184,14 @@ def test_matmul_tensorize_too_small():
 
     @T.prim_func(private=True)
     def expected(var_X: T.handle, W: T.Buffer((15, 256), "float16"), var_compute: T.handle):
-        T.func_attr({"tir.is_scheduled": True, "tir.noalias": True})
+        T.func_attr({"tirx.is_scheduled": True, "tirx.noalias": True})
         m = T.int32()
         X = T.match_buffer(var_X, (m, 256), "float16")
         compute = T.match_buffer(var_compute, (m, 15))
         # with T.sblock("root"):
-        compute_reindex_pad_local = T.alloc_buffer((1, (m + 31) // 32 * 32, 64), scope="local")
-        X_reindex_pad_shared = T.alloc_buffer((1, (m + 31) // 32 * 32, 256), "float16", scope="shared")
-        W_reindex_pad_shared = T.alloc_buffer((1, 64, 256), "float16", scope="shared")
+        compute_reindex_pad_local = T.sblock_alloc_buffer((1, (m + 31) // 32 * 32, 64), scope="local")
+        X_reindex_pad_shared = T.sblock_alloc_buffer((1, (m + 31) // 32 * 32, 256), "float16", scope="shared")
+        W_reindex_pad_shared = T.sblock_alloc_buffer((1, 64, 256), "float16", scope="shared")
         for ax0_ax2_0_fused in T.thread_binding(1, thread="blockIdx.y"):
             for ax1_0 in T.thread_binding((m + 31) // 32, thread="blockIdx.x"):
                 for ax2_1 in T.thread_binding(1, thread="vthread.y"):
@@ -265,15 +265,15 @@ def test_matmul_tensorize_epilogue():
     # fmt: off
     @T.prim_func(private=True)
     def before(lv686: T.Buffer((T.int32(4096), T.int32(256)), "uint32"), lv687: T.Buffer((T.int32(4096), T.int32(64)), "float16"), p_lv42: T.handle, p_lv3: T.handle, p_output0: T.handle):
-        T.func_attr({"tir.noalias": True})
+        T.func_attr({"tirx.noalias": True})
         n = T.int32()
         lv42 = T.match_buffer(p_lv42, (T.int32(1), n, T.int32(2048)), "float16")
         lv3 = T.match_buffer(p_lv3, (T.int32(1), n, T.int32(4096)), "float16")
         p_output0_intermediate = T.match_buffer(p_output0, (T.int32(1), n, T.int32(4096)), "float16")
         # with T.sblock("root"):
-        p_output0_intermediate_1 = T.alloc_buffer((T.int32(4096), T.int32(2048)), "float16")
-        var_NT_matmul_intermediate = T.alloc_buffer((T.int32(1), n, T.int32(4096)), "float16")
-        var_T_divide_intermediate = T.alloc_buffer((T.int32(1), n, T.int32(4096)), "float16")
+        p_output0_intermediate_1 = T.sblock_alloc_buffer((T.int32(4096), T.int32(2048)), "float16")
+        var_NT_matmul_intermediate = T.sblock_alloc_buffer((T.int32(1), n, T.int32(4096)), "float16")
+        var_T_divide_intermediate = T.sblock_alloc_buffer((T.int32(1), n, T.int32(4096)), "float16")
         for i, j in T.grid(T.int32(4096), T.int32(2048)):
             with T.sblock("decode"):
                 v_i, v_j = T.axis.remap("SS", [i, j])
@@ -303,18 +303,18 @@ def test_matmul_tensorize_epilogue():
 
     @T.prim_func(private=True)
     def expected(lv686: T.Buffer((4096, 256), "uint32"), lv687: T.Buffer((4096, 64), "float16"), p_lv42: T.handle, p_lv3: T.handle, p_output0: T.handle):
-        T.func_attr({"tir.is_scheduled": True, "tir.noalias": True})
+        T.func_attr({"tirx.is_scheduled": True, "tirx.noalias": True})
         n = T.int32()
         lv42 = T.match_buffer(p_lv42, (1, n, 2048), "float16")
         lv3 = T.match_buffer(p_lv3, (1, n, 4096), "float16")
         p_output0_intermediate = T.match_buffer(p_output0, (1, n, 4096), "float16")
         # with T.sblock("root"):
-        lv42_reindex_pad_shared_dyn = T.alloc_buffer((1, (n + 127) // 128 * 128, 2048), "float16", scope="shared.dyn")
-        p_output0_intermediate_1_reindex_shared_dyn = T.alloc_buffer((1, 4096, 2048), "float16", scope="shared.dyn")
-        lv42_reindex_pad_shared_dyn_wmma_matrix_a = T.alloc_buffer((1, (n + 127) // 128 * 128, 2048), "float16", scope="wmma.matrix_a")
-        p_output0_intermediate_1_reindex_shared_dyn_wmma_matrix_b = T.alloc_buffer((1, 4096, 2048), "float16", scope="wmma.matrix_b")
-        var_NT_matmul_intermediate_reindex_pad_shared_dyn = T.alloc_buffer((1, (n + 127) // 128 * 128, 4096), "float16", scope="shared.dyn")
-        var_NT_matmul_intermediate_reindex_pad_shared_dyn_wmma_accumulator = T.alloc_buffer((1, (n + 127) // 128 * 128, 4096), "float16", scope="wmma.accumulator")
+        lv42_reindex_pad_shared_dyn = T.sblock_alloc_buffer((1, (n + 127) // 128 * 128, 2048), "float16", scope="shared.dyn")
+        p_output0_intermediate_1_reindex_shared_dyn = T.sblock_alloc_buffer((1, 4096, 2048), "float16", scope="shared.dyn")
+        lv42_reindex_pad_shared_dyn_wmma_matrix_a = T.sblock_alloc_buffer((1, (n + 127) // 128 * 128, 2048), "float16", scope="wmma.matrix_a")
+        p_output0_intermediate_1_reindex_shared_dyn_wmma_matrix_b = T.sblock_alloc_buffer((1, 4096, 2048), "float16", scope="wmma.matrix_b")
+        var_NT_matmul_intermediate_reindex_pad_shared_dyn = T.sblock_alloc_buffer((1, (n + 127) // 128 * 128, 4096), "float16", scope="shared.dyn")
+        var_NT_matmul_intermediate_reindex_pad_shared_dyn_wmma_accumulator = T.sblock_alloc_buffer((1, (n + 127) // 128 * 128, 4096), "float16", scope="wmma.accumulator")
         for ax0 in T.thread_binding(1, thread="blockIdx.z"):
             for ax1_0_0_ax2_0_0_fused in T.thread_binding((n + 127) // 128, thread="blockIdx.x"):
                 for ax1_0_1_ax2_0_1_fused in T.thread_binding(32, thread="blockIdx.y"):
@@ -344,7 +344,7 @@ def test_matmul_tensorize_epilogue():
                                                 v2 = T.axis.spatial(2048, ax3_0_0 * 64 + (ax0_ax1_fused_0 * 2048 + ax0_ax1_fused_1 * 128 + ax0_ax1_fused_2 * 4 + ax0_ax1_fused_3) % 64)
                                                 T.reads(lv42[v0, v1, v2])
                                                 T.writes(lv42_reindex_pad_shared_dyn[v0, v1, v2])
-                                                T.sblock_attr({"buffer_dim_align": [[0, 1, 16, 8]], "double_buffer_scope": 0, "tir.manifest_shared_memory_local_stage": 1})
+                                                T.sblock_attr({"buffer_dim_align": [[0, 1, 16, 8]], "double_buffer_scope": 0, "tirx.manifest_shared_memory_local_stage": 1})
                                                 lv42_reindex_pad_shared_dyn[v0, v1, v2] = T.if_then_else(v1 < n, lv42[v0, v1, v2], T.float16(0))
                             for ax0_ax1_fused_0 in range(4):
                                 for ax0_ax1_fused_1 in T.thread_binding(16, thread="threadIdx.y"):
@@ -356,7 +356,7 @@ def test_matmul_tensorize_epilogue():
                                                 v2 = T.axis.spatial(2048, ax3_0_0 * 64 + (ax0_ax1_fused_0 * 2048 + ax0_ax1_fused_1 * 128 + ax0_ax1_fused_2 * 4 + ax0_ax1_fused_3) % 64)
                                                 T.reads(lv686[v1, v2 // 8], lv687[v1, v2 // 32])
                                                 T.writes(p_output0_intermediate_1_reindex_shared_dyn[v0, v1, v2])
-                                                T.sblock_attr({"buffer_dim_align": [[0, 1, 16, 8]], "double_buffer_scope": 0, "tir.manifest_shared_memory_local_stage": 1})
+                                                T.sblock_attr({"buffer_dim_align": [[0, 1, 16, 8]], "double_buffer_scope": 0, "tirx.manifest_shared_memory_local_stage": 1})
                                                 p_output0_intermediate_1_reindex_shared_dyn[v0, v1, v2] = (T.Cast("float16", T.bitwise_and(T.shift_right(lv686[v1, v2 // 8], T.Cast("uint32", v2 % 8) * T.uint32(4)), T.uint32(15))) - T.float16(7)) * lv687[v1, v2 // 32]
                             for ax3_0_1 in range(4, annotations={"software_pipeline_order": [0, 1, 2], "software_pipeline_stage": [0, 0, 1]}):
                                 for ax0_0 in T.unroll(2):
@@ -434,7 +434,7 @@ def test_matmul_int8_tensorize():
     # fmt: off
     @T.prim_func(private=True)
     def before(X: T.Buffer((256, 256), "int8"), W: T.Buffer((256, 256), "int8"), compute: T.Buffer((256, 256), "int32")):
-        T.func_attr({"tir.noalias": True})
+        T.func_attr({"tirx.noalias": True})
         # with T.sblock("root"):
         for i, j, r in T.grid(256, 256, 256):
             with T.sblock("compute"):
@@ -447,14 +447,14 @@ def test_matmul_int8_tensorize():
 
     @T.prim_func(private=True)
     def expected(X: T.Buffer((256, 256), "int8"), W: T.Buffer((256, 256), "int8"), compute: T.Buffer((256, 256), "int32")):
-        T.func_attr({"tir.is_scheduled": True, "tir.noalias": True})
+        T.func_attr({"tirx.is_scheduled": True, "tirx.noalias": True})
         # with T.sblock("root"):
-        X_reindex_shared_dyn = T.alloc_buffer((1, 256, 256), "int8", scope="shared.dyn")
-        W_reindex_shared_dyn = T.alloc_buffer((1, 256, 256), "int8", scope="shared.dyn")
-        X_reindex_shared_dyn_wmma_matrix_a = T.alloc_buffer((1, 256, 256), "int8", scope="wmma.matrix_a")
-        W_reindex_shared_dyn_wmma_matrix_b = T.alloc_buffer((1, 256, 256), "int8", scope="wmma.matrix_b")
-        compute_reindex_shared_dyn = T.alloc_buffer((1, 256, 256), "int32", scope="shared.dyn")
-        compute_reindex_shared_dyn_wmma_accumulator = T.alloc_buffer((1, 256, 256), "int32", scope="wmma.accumulator")
+        X_reindex_shared_dyn = T.sblock_alloc_buffer((1, 256, 256), "int8", scope="shared.dyn")
+        W_reindex_shared_dyn = T.sblock_alloc_buffer((1, 256, 256), "int8", scope="shared.dyn")
+        X_reindex_shared_dyn_wmma_matrix_a = T.sblock_alloc_buffer((1, 256, 256), "int8", scope="wmma.matrix_a")
+        W_reindex_shared_dyn_wmma_matrix_b = T.sblock_alloc_buffer((1, 256, 256), "int8", scope="wmma.matrix_b")
+        compute_reindex_shared_dyn = T.sblock_alloc_buffer((1, 256, 256), "int32", scope="shared.dyn")
+        compute_reindex_shared_dyn_wmma_accumulator = T.sblock_alloc_buffer((1, 256, 256), "int32", scope="wmma.accumulator")
         for ax0 in T.thread_binding(1, thread="blockIdx.z"):
             for ax1_0_0_ax2_0_0_fused in T.thread_binding(2, thread="blockIdx.x"):
                 for ax1_0_1_ax2_0_1_fused in T.thread_binding(2, thread="blockIdx.y"):
@@ -484,7 +484,7 @@ def test_matmul_int8_tensorize():
                                                 v2 = T.axis.spatial(256, ax3_0_0 * 16 + (ax0_ax1_fused_0 * 2048 + ax0_ax1_fused_1 * 128 + ax0_ax1_fused_2 * 4 + ax0_ax1_fused_3) % 16)
                                                 T.reads(X[v1, v2])
                                                 T.writes(X_reindex_shared_dyn[v0, v1, v2])
-                                                T.sblock_attr({"buffer_dim_align": [[0, 1, 32, 16]], "double_buffer_scope": 0, "tir.manifest_shared_memory_local_stage": 1})
+                                                T.sblock_attr({"buffer_dim_align": [[0, 1, 32, 16]], "double_buffer_scope": 0, "tirx.manifest_shared_memory_local_stage": 1})
                                                 X_reindex_shared_dyn[v0, v1, v2] = X[v1, v2]
                             for ax0_ax1_fused_0 in range(1):
                                 for ax0_ax1_fused_1 in T.thread_binding(16, thread="threadIdx.y"):
@@ -496,7 +496,7 @@ def test_matmul_int8_tensorize():
                                                 v2 = T.axis.spatial(256, ax3_0_0 * 16 + (ax0_ax1_fused_0 * 2048 + ax0_ax1_fused_1 * 128 + ax0_ax1_fused_2 * 4 + ax0_ax1_fused_3) % 16)
                                                 T.reads(W[v1, v2])
                                                 T.writes(W_reindex_shared_dyn[v0, v1, v2])
-                                                T.sblock_attr({"buffer_dim_align": [[0, 1, 32, 16]], "double_buffer_scope": 0, "tir.manifest_shared_memory_local_stage": 1})
+                                                T.sblock_attr({"buffer_dim_align": [[0, 1, 32, 16]], "double_buffer_scope": 0, "tirx.manifest_shared_memory_local_stage": 1})
                                                 W_reindex_shared_dyn[v0, v1, v2] = W[v1, v2]
                             for ax3_0_1 in T.serial(1, annotations={"software_pipeline_order": [0, 1, 2], "software_pipeline_stage": [0, 0, 1]}):
                                 for ax0_0 in T.unroll(2):
@@ -573,7 +573,7 @@ def test_matmul_int8_tensorize_3d2d_dyn():
     # fmt: off
     @T.prim_func(private=True)
     def before(var_A: T.handle, B: T.Buffer((4096, 22016), "int8"), var_matmul: T.handle):
-        T.func_attr({"op_pattern": 4, "tir.noalias": True})
+        T.func_attr({"op_pattern": 4, "tirx.noalias": True})
         m = T.int32()
         A = T.match_buffer(var_A, (1, m, 22016), "int8")
         matmul_1 = T.match_buffer(var_matmul, (1, m, 4096), "int32")
@@ -589,17 +589,17 @@ def test_matmul_int8_tensorize_3d2d_dyn():
 
     @T.prim_func(private=True)
     def expected(var_A: T.handle, B: T.Buffer((4096, 22016), "int8"), var_matmul: T.handle):
-        T.func_attr({"op_pattern": 4, "tir.is_scheduled": True, "tir.noalias": True})
+        T.func_attr({"op_pattern": 4, "tirx.is_scheduled": True, "tirx.noalias": True})
         m = T.int32()
         A = T.match_buffer(var_A, (1, m, 22016), "int8")
         matmul_1 = T.match_buffer(var_matmul, (1, m, 4096), "int32")
         # with T.sblock("root"):
-        A_reindex_pad_shared_dyn = T.alloc_buffer((1, (m + 127) // 128 * 128, 22016), "int8", scope="shared.dyn")
-        B_reindex_shared_dyn = T.alloc_buffer((1, 4096, 22016), "int8", scope="shared.dyn")
-        A_reindex_pad_shared_dyn_wmma_matrix_a = T.alloc_buffer((1, (m + 127) // 128 * 128, 22016), "int8", scope="wmma.matrix_a")
-        B_reindex_shared_dyn_wmma_matrix_b = T.alloc_buffer((1, 4096, 22016), "int8", scope="wmma.matrix_b")
-        matmul_1_reindex_pad_shared_dyn = T.alloc_buffer((1, (m + 127) // 128 * 128, 4096), "int32", scope="shared.dyn")
-        matmul_1_reindex_pad_shared_dyn_wmma_accumulator = T.alloc_buffer((1, (m + 127) // 128 * 128, 4096), "int32", scope="wmma.accumulator")
+        A_reindex_pad_shared_dyn = T.sblock_alloc_buffer((1, (m + 127) // 128 * 128, 22016), "int8", scope="shared.dyn")
+        B_reindex_shared_dyn = T.sblock_alloc_buffer((1, 4096, 22016), "int8", scope="shared.dyn")
+        A_reindex_pad_shared_dyn_wmma_matrix_a = T.sblock_alloc_buffer((1, (m + 127) // 128 * 128, 22016), "int8", scope="wmma.matrix_a")
+        B_reindex_shared_dyn_wmma_matrix_b = T.sblock_alloc_buffer((1, 4096, 22016), "int8", scope="wmma.matrix_b")
+        matmul_1_reindex_pad_shared_dyn = T.sblock_alloc_buffer((1, (m + 127) // 128 * 128, 4096), "int32", scope="shared.dyn")
+        matmul_1_reindex_pad_shared_dyn_wmma_accumulator = T.sblock_alloc_buffer((1, (m + 127) // 128 * 128, 4096), "int32", scope="wmma.accumulator")
         for ax0 in T.thread_binding(1, thread="blockIdx.z"):
             for ax1_0_0_ax2_0_0_fused in T.thread_binding((m + 127) // 128, thread="blockIdx.x"):
                 for ax1_0_1_ax2_0_1_fused in T.thread_binding(32, thread="blockIdx.y"):
@@ -629,7 +629,7 @@ def test_matmul_int8_tensorize_3d2d_dyn():
                                                 v2 = T.axis.spatial(22016, ax3_0_0 * 16 + (ax0_ax1_fused_0 * 2048 + ax0_ax1_fused_1 * 128 + ax0_ax1_fused_2 * 4 + ax0_ax1_fused_3) % 16)
                                                 T.reads(A[v0, v1, v2])
                                                 T.writes(A_reindex_pad_shared_dyn[v0, v1, v2])
-                                                T.sblock_attr({"buffer_dim_align": [[0, 1, 32, 16]], "double_buffer_scope": 0, "tir.manifest_shared_memory_local_stage": 1})
+                                                T.sblock_attr({"buffer_dim_align": [[0, 1, 32, 16]], "double_buffer_scope": 0, "tirx.manifest_shared_memory_local_stage": 1})
                                                 A_reindex_pad_shared_dyn[v0, v1, v2] = T.if_then_else(v1 < m, A[v0, v1, v2], T.int8(0))
                             for ax0_ax1_fused_0 in range(1):
                                 for ax0_ax1_fused_1 in T.thread_binding(16, thread="threadIdx.y"):
@@ -641,7 +641,7 @@ def test_matmul_int8_tensorize_3d2d_dyn():
                                                 v2 = T.axis.spatial(22016, ax3_0_0 * 16 + (ax0_ax1_fused_0 * 2048 + ax0_ax1_fused_1 * 128 + ax0_ax1_fused_2 * 4 + ax0_ax1_fused_3) % 16)
                                                 T.reads(B[v1, v2])
                                                 T.writes(B_reindex_shared_dyn[v0, v1, v2])
-                                                T.sblock_attr({"buffer_dim_align": [[0, 1, 32, 16]], "double_buffer_scope": 0, "tir.manifest_shared_memory_local_stage": 1})
+                                                T.sblock_attr({"buffer_dim_align": [[0, 1, 32, 16]], "double_buffer_scope": 0, "tirx.manifest_shared_memory_local_stage": 1})
                                                 B_reindex_shared_dyn[v0, v1, v2] = B[v1, v2]
                             for ax3_0_1 in T.serial(1, annotations={"software_pipeline_order": [0, 1, 2], "software_pipeline_stage": [0, 0, 1]}):
                                 for ax0_0 in T.unroll(2):
@@ -735,17 +735,17 @@ def test_matmul_metal():
 
     @T.prim_func(private=True)
     def expected(var_A: T.handle, B: T.Buffer((28672, 4096), "float16"), var_C: T.handle):
-        T.func_attr({"tir.is_scheduled": True})
+        T.func_attr({"tirx.is_scheduled": True})
         batch_size = T.int32()
         A = T.match_buffer(var_A, (batch_size, 1, 4096), "float16")
         C = T.match_buffer(var_C, (batch_size, 1, 28672), "float16")
         # with T.sblock("root"):
-        A_reindex_pad_shared = T.alloc_buffer((1, (batch_size + 15) // 16 * 16, 4096), "float16", scope="shared")
-        B_reindex_shared = T.alloc_buffer((1, 28672, 4096), "float16", scope="shared")
-        A_reindex_pad_shared_metal_simdgroup = T.alloc_buffer((1, (batch_size + 15) // 16 * 16, 4096), "float16", scope="metal.simdgroup")
-        B_reindex_shared_metal_simdgroup = T.alloc_buffer((1, 4096, 28672), "float16", scope="metal.simdgroup")
-        C_reindex_pad_metal_simdgroup = T.alloc_buffer((1, (batch_size + 15) // 16 * 16, 28672), "float16", scope="metal.simdgroup")
-        C_reindex_pad_shared = T.alloc_buffer((1, (batch_size + 15) // 16 * 16, 28672), "float16", scope="shared")
+        A_reindex_pad_shared = T.sblock_alloc_buffer((1, (batch_size + 15) // 16 * 16, 4096), "float16", scope="shared")
+        B_reindex_shared = T.sblock_alloc_buffer((1, 28672, 4096), "float16", scope="shared")
+        A_reindex_pad_shared_metal_simdgroup = T.sblock_alloc_buffer((1, (batch_size + 15) // 16 * 16, 4096), "float16", scope="metal.simdgroup")
+        B_reindex_shared_metal_simdgroup = T.sblock_alloc_buffer((1, 4096, 28672), "float16", scope="metal.simdgroup")
+        C_reindex_pad_metal_simdgroup = T.sblock_alloc_buffer((1, (batch_size + 15) // 16 * 16, 28672), "float16", scope="metal.simdgroup")
+        C_reindex_pad_shared = T.sblock_alloc_buffer((1, (batch_size + 15) // 16 * 16, 28672), "float16", scope="shared")
         for ax0 in T.thread_binding(1, thread="blockIdx.z"):
             for ax1_0 in T.thread_binding((batch_size + 15) // 16, thread="blockIdx.x"):
                 for ax2_0 in T.thread_binding(448, thread="blockIdx.y"):
@@ -861,8 +861,8 @@ def test_matmul_metal_int4_quant():
         batch_size = T.int32()
         A = T.match_buffer(var_A, (batch_size, 1, 4096), "float16")
         C = T.match_buffer(var_C, (batch_size, 1, 28672), "float16")
-        compute = T.alloc_buffer((28672, 4096), "float16")
-        B = T.alloc_buffer((28672, 4096), "float16")
+        compute = T.sblock_alloc_buffer((28672, 4096), "float16")
+        B = T.sblock_alloc_buffer((28672, 4096), "float16")
         for i0, i1 in T.grid(28672, 4096):
             with T.sblock("compute"):
                 v_i0, v_i1 = T.axis.remap("SS", [i0, i1])
@@ -880,17 +880,17 @@ def test_matmul_metal_int4_quant():
 
     @T.prim_func(private=True)
     def expected(B0: T.Buffer((28672, 512), "uint32"), B1: T.Buffer((28672, 128), "float16"), var_A: T.handle, var_C: T.handle):
-        T.func_attr({"tir.is_scheduled": True})
+        T.func_attr({"tirx.is_scheduled": True})
         batch_size = T.int32()
         A = T.match_buffer(var_A, (batch_size, 1, 4096), "float16")
         C = T.match_buffer(var_C, (batch_size, 1, 28672), "float16")
         # with T.sblock("root"):
-        A_reindex_pad_shared = T.alloc_buffer((1, (batch_size + 15) // 16 * 16, 4096), "float16", scope="shared")
-        B_reindex_shared = T.alloc_buffer((1, 28672, 4096), "float16", scope="shared")
-        A_reindex_pad_shared_metal_simdgroup = T.alloc_buffer((1, (batch_size + 15) // 16 * 16, 4096), "float16", scope="metal.simdgroup")
-        B_reindex_shared_metal_simdgroup = T.alloc_buffer((1, 4096, 28672), "float16", scope="metal.simdgroup")
-        C_reindex_pad_metal_simdgroup = T.alloc_buffer((1, (batch_size + 15) // 16 * 16, 28672), "float16", scope="metal.simdgroup")
-        C_reindex_pad_shared = T.alloc_buffer((1, (batch_size + 15) // 16 * 16, 28672), "float16", scope="shared")
+        A_reindex_pad_shared = T.sblock_alloc_buffer((1, (batch_size + 15) // 16 * 16, 4096), "float16", scope="shared")
+        B_reindex_shared = T.sblock_alloc_buffer((1, 28672, 4096), "float16", scope="shared")
+        A_reindex_pad_shared_metal_simdgroup = T.sblock_alloc_buffer((1, (batch_size + 15) // 16 * 16, 4096), "float16", scope="metal.simdgroup")
+        B_reindex_shared_metal_simdgroup = T.sblock_alloc_buffer((1, 4096, 28672), "float16", scope="metal.simdgroup")
+        C_reindex_pad_metal_simdgroup = T.sblock_alloc_buffer((1, (batch_size + 15) // 16 * 16, 28672), "float16", scope="metal.simdgroup")
+        C_reindex_pad_shared = T.sblock_alloc_buffer((1, (batch_size + 15) // 16 * 16, 28672), "float16", scope="shared")
         for ax0 in T.thread_binding(1, thread="blockIdx.z"):
             for ax1_0 in T.thread_binding((batch_size + 15) // 16, thread="blockIdx.x"):
                 for ax2_0 in T.thread_binding(448, thread="blockIdx.y"):

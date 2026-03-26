@@ -23,14 +23,14 @@
  */
 #include <tvm/ffi/reflection/registry.h>
 #include <tvm/ir/op.h>
-#include <tvm/tir/analysis.h>
-#include <tvm/tir/stmt_functor.h>
+#include <tvm/tirx/analysis.h>
+#include <tvm/tirx/stmt_functor.h>
 
-#include "../../tir/ir/tir_visitor_with_path.h"
+#include "../../tirx/ir/tir_visitor_with_path.h"
 
 namespace tvm {
 namespace s_tir {
-using namespace tvm::tir;
+using namespace tvm::tirx;
 
 using AccessPath = ffi::reflection::AccessPath;
 
@@ -46,8 +46,8 @@ class PurityChecker : TIRVisitorWithPath {
  private:
   explicit PurityChecker(bool assert_on_error) : assert_on_error_(assert_on_error) {}
 
-  void VisitStmt_(const AllocateNode* op, AccessPath path) override {
-    internal_allocations_.insert(op->buffer_var);
+  void VisitStmt_(const AllocBufferNode* op, AccessPath path) override {
+    internal_allocations_.insert(op->buffer->data);
     TIRVisitorWithPath::VisitStmt_(op, path);
   }
 

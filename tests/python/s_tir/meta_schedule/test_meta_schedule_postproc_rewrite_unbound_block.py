@@ -18,9 +18,9 @@
 # ruff: noqa: F401
 
 import tvm
-from tvm import tir
+from tvm import tirx
 from tvm.s_tir import meta_schedule as ms
-from tvm.script import tir as T
+from tvm.script import tirx as T
 from tvm.target import Target
 
 
@@ -75,7 +75,7 @@ class After_cooperative_fetch:
 class Before_norm_bmn:
     @T.prim_func
     def main(A: T.Buffer((1, 256, 256), "float32"), D: T.Buffer((1,), "float32")) -> None:
-        C = T.alloc_buffer([1], dtype="float32")
+        C = T.sblock_alloc_buffer([1], dtype="float32")
         for i0, i1, i2 in T.grid(1, 256, 256):
             with T.sblock("C"):
                 b, i, j = T.axis.remap("SRR", [i0, i1, i2])
@@ -92,7 +92,7 @@ class Before_norm_bmn:
 class After_norm_bmn:
     @T.prim_func
     def main(A: T.Buffer((1, 256, 256), "float32"), D: T.Buffer((1,), "float32")) -> None:
-        C = T.alloc_buffer([1], dtype="float32")
+        C = T.sblock_alloc_buffer([1], dtype="float32")
         for i0_fused_0 in T.thread_binding(1, thread="blockIdx.x"):
             for i0_fused_1 in T.thread_binding(1, thread="threadIdx.x"):
                 for i1, i2 in T.grid(256, 256):
@@ -235,9 +235,9 @@ def before_unrolled_loop(
     placeholder: T.Buffer((1, 56, 56, 64), "float32"),
 ) -> None:
     # function attr dict
-    T.func_attr({"global_symbol": "main", "tir.noalias": True})
-    bgemm = T.alloc_buffer([6, 6, 196, 64], dtype="float32")
-    inverse = T.alloc_buffer([4, 4, 196, 64], dtype="float32")
+    T.func_attr({"global_symbol": "main", "tirx.noalias": True})
+    bgemm = T.sblock_alloc_buffer([6, 6, 196, 64], dtype="float32")
+    inverse = T.sblock_alloc_buffer([4, 4, 196, 64], dtype="float32")
     for i2_0, i3_0, i2_1, i3_1 in T.grid(98, 4, 2, 16):
         for i0 in T.unroll(4):
             for i1 in T.unroll(4):
@@ -259,11 +259,11 @@ def before_unrolled_loop(
 def after_unrolled_loop(
     placeholder: T.Buffer((1, 56, 56, 64), "float32"),
 ) -> None:
-    T.func_attr({"global_symbol": "main", "tir.noalias": True})
+    T.func_attr({"global_symbol": "main", "tirx.noalias": True})
     # body
     # with T.sblock("root")
-    bgemm = T.alloc_buffer([6, 6, 196, 64], dtype="float32")
-    inverse = T.alloc_buffer([4, 4, 196, 64], dtype="float32")
+    bgemm = T.sblock_alloc_buffer([6, 6, 196, 64], dtype="float32")
+    inverse = T.sblock_alloc_buffer([4, 4, 196, 64], dtype="float32")
     for i2_0_i3_0_i2_1_i3_1_fused_0 in T.thread_binding(13, thread="blockIdx.x"):
         for i2_0_i3_0_i2_1_i3_1_fused_1 in T.thread_binding(1024, thread="threadIdx.x"):
             for i0 in T.unroll(4):

@@ -19,10 +19,10 @@
 
 import tvm
 import tvm.testing
-from tvm import tir
+from tvm import tirx
 from tvm.s_tir import meta_schedule as ms
 from tvm.s_tir.meta_schedule.testing import te_workload
-from tvm.script import tir as T
+from tvm.script import tirx as T
 from tvm.target import Target
 from tvm.te import create_prim_func
 
@@ -55,15 +55,15 @@ class AfterRewrite0:
     @T.prim_func
     def main(var_A: T.handle, var_B: T.handle, var_C: T.handle) -> None:
         # function attr dict
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
+        T.func_attr({"global_symbol": "main", "tirx.noalias": True})
         A = T.match_buffer(var_A, [512, 512], dtype="float32")
         B = T.match_buffer(var_B, [512, 512], dtype="float32")
         C = T.match_buffer(var_C, [512, 512], dtype="float32")
         # body
         # with T.sblock("root")
-        C_local = T.alloc_buffer([512, 512], dtype="float32", scope="local")
-        A_shared = T.alloc_buffer([512, 512], dtype="float32", scope="shared")
-        B_shared = T.alloc_buffer([512, 512], dtype="float32", scope="shared")
+        C_local = T.sblock_alloc_buffer([512, 512], dtype="float32", scope="local")
+        A_shared = T.sblock_alloc_buffer([512, 512], dtype="float32", scope="shared")
+        B_shared = T.sblock_alloc_buffer([512, 512], dtype="float32", scope="shared")
         for i0_0_i1_0_fused in T.thread_binding(0, 16, thread="blockIdx.x"):
             for i0_1_i1_1_fused in T.thread_binding(0, 16, thread="vthread.x"):
                 for i0_2_i1_2_fused in T.thread_binding(0, 8, thread="threadIdx.x"):
@@ -113,12 +113,12 @@ class WarpExecutionAfterRewrite:
         C: T.Buffer((512, 512), "float32"),
     ) -> None:
         # function attr dict
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
+        T.func_attr({"global_symbol": "main", "tirx.noalias": True})
         # body
         # with T.sblock("root")
-        C_local = T.alloc_buffer([512, 512], dtype="float32", scope="local")
-        A_shared = T.alloc_buffer([512, 512], dtype="float32", scope="shared")
-        B_shared = T.alloc_buffer([512, 512], dtype="float32", scope="shared")
+        C_local = T.sblock_alloc_buffer([512, 512], dtype="float32", scope="local")
+        A_shared = T.sblock_alloc_buffer([512, 512], dtype="float32", scope="shared")
+        B_shared = T.sblock_alloc_buffer([512, 512], dtype="float32", scope="shared")
         for i0_0_i1_0_fused in T.thread_binding(0, 16, thread="blockIdx.x"):
             for i0_1_i1_1_fused in T.thread_binding(0, 16, thread="vthread.x"):
                 for i0_2_i1_2_fused in T.thread_binding(0, 8, thread="threadIdx.y"):

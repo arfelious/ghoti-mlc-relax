@@ -22,7 +22,7 @@ import tvm
 import tvm.testing
 from tvm.s_tir import meta_schedule as ms
 from tvm.s_tir.schedule.testing import assert_structural_equal_ignore_global_symbol
-from tvm.script import tir as T
+from tvm.script import tirx as T
 from tvm.target import Target
 
 
@@ -98,7 +98,7 @@ def test_tir_matmul():
         C: T.Buffer((16, 16), "float32"),
     ) -> None:
         T.func_attr({"layout_free_buffers": [1]})
-        B_reindex = T.alloc_buffer([16, 4, 4], dtype="float32")
+        B_reindex = T.sblock_alloc_buffer([16, 4, 4], dtype="float32")
         for ax0, ax1 in T.grid(16, 16):
             with T.sblock("layout_rewrite"):
                 i0, i1 = T.axis.remap("SS", [ax0, ax1])
@@ -155,7 +155,7 @@ def test_extent_one():
     def expected(A: T.Buffer((16, 1), "float32")):
         T.func_attr({"layout_free_buffers": [0]})
 
-        A_global = T.alloc_buffer([16], dtype="float32")
+        A_global = T.sblock_alloc_buffer([16], dtype="float32")
         for ax0, ax1 in T.grid(16, 1):
             with T.sblock("A_global"):
                 v0, v1 = T.axis.remap("SS", [ax0, ax1])
@@ -196,7 +196,7 @@ def rewritten_tir_matmul(
     C: T.Buffer((16, 16), "float32"),
 ) -> None:
     T.func_attr({"layout_free_buffers": [1]})
-    B_reindex = T.alloc_buffer([16, 4, 4], dtype="float32")
+    B_reindex = T.sblock_alloc_buffer([16, 4, 4], dtype="float32")
     for ax0, ax1 in T.grid(16, 16):
         with T.sblock("layout_rewrite"):
             i0, i1 = T.axis.remap("SS", [ax0, ax1])
@@ -226,11 +226,11 @@ def test_layout_rewrite():
 class Conv2dCacheRead:
     @T.prim_func
     def main(p0: T.Buffer((1, 56, 56, 64), "float32"), p1: T.Buffer((3, 3, 64, 64), "float32"), conv2d_nhwc: T.Buffer((1, 56, 56, 64), "float32")):
-        T.func_attr({"layout_free_buffers": [1], "tir.noalias": True, "global_symbol": "main"})
-        pad_temp = T.alloc_buffer([1, 58, 58, 64], dtype="float32")
-        conv2d_nhwc_global = T.alloc_buffer([1, 56, 56, 64], dtype="float32")
-        pad_temp_global = T.alloc_buffer([1, 58, 58, 64], dtype="float32")
-        p1_global = T.alloc_buffer([3, 3, 64, 64], dtype="float32")
+        T.func_attr({"layout_free_buffers": [1], "tirx.noalias": True, "global_symbol": "main"})
+        pad_temp = T.sblock_alloc_buffer([1, 58, 58, 64], dtype="float32")
+        conv2d_nhwc_global = T.sblock_alloc_buffer([1, 56, 56, 64], dtype="float32")
+        pad_temp_global = T.sblock_alloc_buffer([1, 58, 58, 64], dtype="float32")
+        p1_global = T.sblock_alloc_buffer([3, 3, 64, 64], dtype="float32")
         for i0_0_i1_0_i2_0_fused in T.parallel(4, annotations={"pragma_auto_unroll_max_step":16, "pragma_unroll_explicit":1}):
             for ax0, ax1, ax2 in T.grid(1, 30, 30):
                 for ax3_fused in T.vectorized(64):
@@ -303,12 +303,12 @@ class Conv2dCacheRead:
 class Conv2dCacheReadRewritten:
     @T.prim_func
     def main(p0: T.Buffer((1, 56, 56, 64), "float32"), p1: T.Buffer((3, 3, 64, 64), "float32"), conv2d_nhwc: T.Buffer((1, 56, 56, 64), "float32")):
-        T.func_attr({"layout_free_buffers": [1], "tir.noalias": True, "global_symbol": "main"})
-        pad_temp = T.alloc_buffer([1, 58, 58, 64], dtype="float32")
-        conv2d_nhwc_global = T.alloc_buffer([1, 56, 56, 64], dtype="float32")
-        pad_temp_global = T.alloc_buffer([1, 58, 58, 64], dtype="float32")
-        p1_global = T.alloc_buffer([16, 2, 2, 3, 3, 32, 2], dtype="float32")
-        p1_global_1 = T.alloc_buffer([16, 2, 2, 3, 3, 32, 2], dtype="float32")
+        T.func_attr({"layout_free_buffers": [1], "tirx.noalias": True, "global_symbol": "main"})
+        pad_temp = T.sblock_alloc_buffer([1, 58, 58, 64], dtype="float32")
+        conv2d_nhwc_global = T.sblock_alloc_buffer([1, 56, 56, 64], dtype="float32")
+        pad_temp_global = T.sblock_alloc_buffer([1, 58, 58, 64], dtype="float32")
+        p1_global = T.sblock_alloc_buffer([16, 2, 2, 3, 3, 32, 2], dtype="float32")
+        p1_global_1 = T.sblock_alloc_buffer([16, 2, 2, 3, 3, 32, 2], dtype="float32")
         for ax0, ax1, ax2, ax3 in T.grid(3, 3, 64, 64):
             with T.sblock("p1_global"):
                 v0, v1, v2, v3 = T.axis.remap("SSSS", [ax0, ax1, ax2, ax3])
@@ -388,13 +388,13 @@ class Conv2dCacheReadRewritten:
 class Conv2dCacheReadMultipleRewritten:
     @T.prim_func
     def main(p0: T.Buffer((1, 56, 56, 64), "float32"), p1: T.Buffer((3, 3, 64, 64), "float32"), conv2d_nhwc: T.Buffer((1, 56, 56, 64), "float32")):
-        T.func_attr({"layout_free_buffers": [1], "tir.noalias": True, "global_symbol": "main"})
-        pad_temp = T.alloc_buffer([1, 58, 58, 64], dtype="float32")
-        conv2d_nhwc_global = T.alloc_buffer([1, 56, 56, 64], dtype="float32")
-        pad_temp_global = T.alloc_buffer([1, 58, 58, 64], dtype="float32")
-        p1_global = T.alloc_buffer([16, 2, 2, 3, 3, 32, 2], dtype="float32")
-        p1_global2 = T.alloc_buffer([16, 2, 2, 3, 3, 32, 2], dtype="float32", scope="global2")
-        p1_global_1 = T.alloc_buffer([16, 2, 2, 3, 3, 32, 2], dtype="float32")
+        T.func_attr({"layout_free_buffers": [1], "tirx.noalias": True, "global_symbol": "main"})
+        pad_temp = T.sblock_alloc_buffer([1, 58, 58, 64], dtype="float32")
+        conv2d_nhwc_global = T.sblock_alloc_buffer([1, 56, 56, 64], dtype="float32")
+        pad_temp_global = T.sblock_alloc_buffer([1, 58, 58, 64], dtype="float32")
+        p1_global = T.sblock_alloc_buffer([16, 2, 2, 3, 3, 32, 2], dtype="float32")
+        p1_global2 = T.sblock_alloc_buffer([16, 2, 2, 3, 3, 32, 2], dtype="float32", scope="global2")
+        p1_global_1 = T.sblock_alloc_buffer([16, 2, 2, 3, 3, 32, 2], dtype="float32")
         for ax0, ax1, ax2, ax3 in T.grid(3, 3, 64, 64):
             with T.sblock("p1_global"):
                 v0, v1, v2, v3 = T.axis.remap("SSSS", [ax0, ax1, ax2, ax3])
@@ -504,7 +504,7 @@ def test_layout_rewrite_int64_index():
         p1: T.Buffer((T.int64(12), T.int64(197), T.int64(64)), "int8"),
         T_batch_matmul_NT: T.Buffer((T.int64(12), T.int64(197), T.int64(197)), "int32"),
     ):
-        T.func_attr({"layout_free_buffers": [1], "tir.noalias": True})
+        T.func_attr({"layout_free_buffers": [1], "tirx.noalias": True})
         for b_0_i_0_fused in T.parallel(T.int64(394)):
             for j_0 in T.serial(T.int64(1)):
                 for b_1, i_1, j_1 in T.grid(T.int64(1), T.int64(1), T.int64(1)):
@@ -565,8 +565,8 @@ def test_layout_rewrite_int64_index():
         p1: T.Buffer((T.int64(12), T.int64(197), T.int64(64)), "int8"),
         T_batch_matmul_NT: T.Buffer((T.int64(12), T.int64(197), T.int64(197)), "int32"),
     ):
-        T.func_attr({"tir.noalias": True, "layout_free_buffers": [1]})
-        p1_global = T.alloc_buffer(
+        T.func_attr({"tirx.noalias": True, "layout_free_buffers": [1]})
+        p1_global = T.sblock_alloc_buffer(
             [T.int64(2), T.int64(64), T.int64(6), T.int64(197)], dtype="int8"
         )
         for ax0, ax1, ax2 in T.grid(T.int64(12), T.int64(197), T.int64(64)):

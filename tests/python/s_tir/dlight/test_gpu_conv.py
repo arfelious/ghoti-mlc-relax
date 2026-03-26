@@ -19,7 +19,7 @@
 import tvm
 import tvm.testing
 from tvm.s_tir import dlight as dl
-from tvm.script import tir as T
+from tvm.script import tirx as T
 from tvm.target import Target
 
 
@@ -31,7 +31,7 @@ def test_conv3d():
         W: T.Buffer((1280, 3, 2, 14, 14), "float16"),
         C: T.Buffer((14308, 1280, 1, 1, 1), "float16"),
     ):
-        pad_A = T.alloc_buffer((14308, 3, 2, 14, 14), "float16")
+        pad_A = T.sblock_alloc_buffer((14308, 3, 2, 14, 14), "float16")
         for i0, i1, i2, i3, i4 in T.grid(14308, 3, 2, 14, 14):
             with T.sblock("pad_A"):
                 v_i0, v_i1, v_i2, v_i3, v_i4 = T.axis.remap("SSSSS", [i0, i1, i2, i3, i4])
@@ -45,11 +45,11 @@ def test_conv3d():
 
     @T.prim_func(private=True)
     def expected(A: T.Buffer((14308, 3, 2, 14, 14), "float16"), W: T.Buffer((1280, 3, 2, 14, 14), "float16"), C: T.Buffer((14308, 1280, 1, 1, 1), "float16")):
-        T.func_attr({"tir.is_scheduled": True})
+        T.func_attr({"tirx.is_scheduled": True})
         # with T.sblock("root"):
-        C_reindex_pad_local = T.alloc_buffer((1, 14336, 1280), "float16", scope="local")
-        pad_A_reindex_pad_shared = T.alloc_buffer((1, 14336, 1184), "float16", scope="shared")
-        W_reindex_pad_shared = T.alloc_buffer((1, 1280, 1184), "float16", scope="shared")
+        C_reindex_pad_local = T.sblock_alloc_buffer((1, 14336, 1280), "float16", scope="local")
+        pad_A_reindex_pad_shared = T.sblock_alloc_buffer((1, 14336, 1184), "float16", scope="shared")
+        W_reindex_pad_shared = T.sblock_alloc_buffer((1, 1280, 1184), "float16", scope="shared")
         for ax0_ax2_0_fused in T.thread_binding(20, thread="blockIdx.y"):
             for ax1_0 in T.thread_binding(448, thread="blockIdx.x"):
                 for ax2_1 in T.thread_binding(1, thread="vthread.y"):

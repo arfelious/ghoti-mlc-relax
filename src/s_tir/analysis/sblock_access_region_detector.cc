@@ -24,15 +24,15 @@
 
 #include <tvm/arith/analyzer.h>
 #include <tvm/ffi/reflection/registry.h>
-#include <tvm/tir/op.h>
-#include <tvm/tir/stmt_functor.h>
+#include <tvm/tirx/op.h>
+#include <tvm/tirx/stmt_functor.h>
 
 #include <unordered_map>
 #include <unordered_set>
 
-#include "../../tir/transform/ir_utils.h"
+#include "../../tirx/transform/ir_utils.h"
 namespace tvm {
-namespace tir {
+namespace tirx {
 
 /*!
  * \brief Detect which regions of tensors in this block are read or written to. Regions are sorted
@@ -117,7 +117,7 @@ class BlockReadWriteDetector : public StmtExprVisitor {
   void VisitStmt_(const IfThenElseNode* op) override;
   void VisitStmt_(const SBlockRealizeNode* op) override;
   void VisitStmt_(const BufferStoreNode* op) override;
-  void VisitStmt_(const LetStmtNode* op) override;
+  void VisitStmt_(const BindNode* op) override;
   void VisitExpr_(const BufferLoadNode* op) override;
   void VisitExpr_(const VarNode* op) override;
   void VisitExpr_(const CallNode* op) override;
@@ -189,10 +189,9 @@ void BlockReadWriteDetector::VisitStmt_(const IfThenElseNode* op) {
   }
 }
 
-void BlockReadWriteDetector::VisitStmt_(const LetStmtNode* op) {
+void BlockReadWriteDetector::VisitStmt_(const BindNode* op) {
   let_bindings_[op->var.get()] = op->value;
   StmtVisitor::VisitStmt_(op);
-  let_bindings_.erase(op->var.get());
 }
 
 void BlockReadWriteDetector::VisitExpr_(const CallNode* op) {
@@ -420,5 +419,5 @@ TVM_FFI_STATIC_INIT_BLOCK() {
       .def("s_tir.analysis.GetSBlockReadWriteRegion", GetSBlockReadWriteRegion);
 }
 
-}  // namespace tir
+}  // namespace tirx
 }  // namespace tvm

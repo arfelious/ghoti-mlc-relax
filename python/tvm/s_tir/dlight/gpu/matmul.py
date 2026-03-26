@@ -21,13 +21,13 @@
 from dataclasses import dataclass
 from enum import Enum
 
-from tvm import s_tir, tir
+from tvm import s_tir, tirx
 from tvm.ir import Range
 from tvm.s_tir.schedule.schedule import SBlockRV
-from tvm.script import tir as T
+from tvm.script import tirx as T
 from tvm.target import Target
-from tvm.tir import IterVar, PrimExpr, Var
-from tvm.tir.analysis import undefined_vars
+from tvm.tirx import IterVar, PrimExpr, Var
+from tvm.tirx.analysis import undefined_vars
 
 from ..analysis import IterInfo, SBlockInfo, get_root_block
 from .base import GPUScheduleRule
@@ -138,17 +138,17 @@ class IterTrait:
 
 
 def _is_one(x: PrimExpr) -> bool:
-    return isinstance(x, tir.IntImm) and x.value == 1
+    return isinstance(x, tirx.IntImm) and x.value == 1
 
 
 def make_iter_fusion_index_map(
     traits: list[IterTrait],
     kind_order: list[IterKind],
-) -> tir.IndexMap:
+) -> tirx.IndexMap:
     fused_iters: dict[IterKind, PrimExpr] = {}
-    input_iters: list[tir.Var] = []
+    input_iters: list[tirx.Var] = []
     for i, trait in enumerate(traits):
-        v_i = tir.Var(f"i{i}", trait.extent.dtype)
+        v_i = tirx.Var(f"i{i}", trait.extent.dtype)
         input_iters.append(v_i)
         if trait.kind == IterKind.kIter_T:
             continue
@@ -159,19 +159,19 @@ def make_iter_fusion_index_map(
         else:
             fused_iters[trait.kind] = v_i
 
-    final_indices: list[tir.PrimExpr] = [
-        fused_iters.get(kind, tir.IntImm(traits[0].extent.dtype, 0)) for kind in kind_order
+    final_indices: list[tirx.PrimExpr] = [
+        fused_iters.get(kind, tirx.IntImm(traits[0].extent.dtype, 0)) for kind in kind_order
     ]
 
-    return tir.IndexMap(input_iters, final_indices, None)
+    return tirx.IndexMap(input_iters, final_indices, None)
 
 
-def detect_iter_traits(block: tir.SBlock) -> tuple[list[IterTrait]] | None:
+def detect_iter_traits(block: tirx.SBlock) -> tuple[list[IterTrait]] | None:
     """Detect iter traits based on the pattern C[S, I, J] += A[S, I, K] * B[S, J, K]
 
     Parameters
     ----------
-    block : tir.SBlock
+    block : tirx.SBlock
         The block to be analyzed
 
     Returns
@@ -215,7 +215,7 @@ def detect_iter_traits(block: tir.SBlock) -> tuple[list[IterTrait]] | None:
                 kind = IterKind.kIter_J
             else:
                 return None
-        elif iter_var.iter_type == tir.IterVar.CommReduce:
+        elif iter_var.iter_type == tirx.IterVar.CommReduce:
             if var in A_axes and var in B_axes and var not in C_axes:
                 kind = IterKind.kIter_K
             else:
@@ -236,17 +236,17 @@ def detect_iter_traits(block: tir.SBlock) -> tuple[list[IterTrait]] | None:
     return A_traits, B_traits, C_traits, block_traits
 
 
-def get_index_map(block: tir.SBlock) -> tuple[tir.IndexMap, ...] | None:
+def get_index_map(block: tirx.SBlock) -> tuple[tirx.IndexMap, ...] | None:
     """Get index maps for the block
 
     Parameters
     ----------
-    block : tir.SBlock
+    block : tirx.SBlock
         The block to be analyzed
 
     Returns
     -------
-    index_maps : Optional[Tuple[tir.IndexMap]]
+    index_maps : Optional[Tuple[tirx.IndexMap]]
         The index maps for the block, or None if the block is not a gemm-liked kernel
     """
     traits = detect_iter_traits(block)
@@ -276,8 +276,8 @@ def get_index_map(block: tir.SBlock) -> tuple[tir.IndexMap, ...] | None:
 
 
 def get_sblock_info(sch: s_tir.Schedule, block: s_tir.schedule.SBlockRV) -> SBlockInfo:
-    def _iter_kind(loop: tir.IterVar) -> str:
-        return {tir.IterVar.DataPar: "S", tir.IterVar.CommReduce: "R"}.get(loop.iter_type, "O")
+    def _iter_kind(loop: tirx.IterVar) -> str:
+        return {tirx.IterVar.DataPar: "S", tirx.IterVar.CommReduce: "R"}.get(loop.iter_type, "O")
 
     def _is_reduction_block(block: s_tir.schedule.SBlockRV):
         for iter_var in sch.get(block).iter_vars:
@@ -326,7 +326,7 @@ def get_reduction_blocks(sch, blocks) -> bool:
     return reduction_blocks
 
 
-def get_in_out_dtypes(block: tir.SBlock) -> tuple[str]:
+def get_in_out_dtypes(block: tirx.SBlock) -> tuple[str]:
     """
     Detect In/Out data types for the given block based on the analysis if read/write buffers.
     """
@@ -348,7 +348,7 @@ class MetalMatmul(GPUScheduleRule):
 
     def apply(  # pylint: disable=too-many-locals,missing-docstring
         self,
-        func: tir.PrimFunc,
+        func: tirx.PrimFunc,
         target: Target,
         _: bool,
     ) -> s_tir.Schedule | None:
@@ -356,7 +356,7 @@ class MetalMatmul(GPUScheduleRule):
             get_simdgroup_intrin_group,
         )
 
-        if not isinstance(func, tir.PrimFunc) or not self.is_target_available(target):
+        if not isinstance(func, tirx.PrimFunc) or not self.is_target_available(target):
             return None
         sch = s_tir.Schedule(func)
         root_block = get_root_block(sch)
@@ -489,7 +489,7 @@ class MatmulTensorization(GPUScheduleRule):
 
     def apply(  # pylint: disable=too-many-locals,missing-docstring
         self,
-        func: tir.PrimFunc,
+        func: tirx.PrimFunc,
         target: Target,
         _: bool,
     ) -> s_tir.Schedule | None:
@@ -497,7 +497,7 @@ class MatmulTensorization(GPUScheduleRule):
             get_wmma_intrin_group,
         )
 
-        if not isinstance(func, tir.PrimFunc) or not self.is_target_available(target):
+        if not isinstance(func, tirx.PrimFunc) or not self.is_target_available(target):
             return None
         sch = s_tir.Schedule(func)
         root_block = get_root_block(sch)
@@ -578,7 +578,12 @@ class MatmulTensorization(GPUScheduleRule):
         i0, i1, i2, i3 = sch.split(i, factors=i_factors)
         j0, j1, j2, j3 = sch.split(j, factors=j_factors)
         k0, k1 = sch.split(k, k_factors)
+<<<<<<< HEAD
         if target.arch.startswith("sm_") and int(target.arch[-2:]) > 75:
+=======
+        arch = target.attrs.get("arch", "")
+        if arch.startswith("sm_") and int(arch[-2:]) > 75:
+>>>>>>> upstream/mlc
             sch.annotate(k0, "software_pipeline_order", [0, 3, 1, 4, 5, 2, 6])
             sch.annotate(k0, "software_pipeline_stage", [0, 0, 0, 0, 0, 1, 1])
             sch.annotate(k1, "software_pipeline_order", [0, 1, 2])
@@ -606,7 +611,7 @@ class MatmulTensorization(GPUScheduleRule):
             sch.vectorize(f_3)
 
             sch.storage_align(block_read, 0, axis=-2, factor=16, offset=8)
-            sch.annotate(block_read, "tir.manifest_shared_memory_local_stage", 1)
+            sch.annotate(block_read, "tirx.manifest_shared_memory_local_stage", 1)
             sch.annotate(block_read, "double_buffer_scope", 0)
             return block_read
 
@@ -711,7 +716,7 @@ class MatmulInt8Tensorization(GPUScheduleRule):
 
     def apply(  # pylint: disable=too-many-locals,missing-docstring
         self,
-        func: tir.PrimFunc,
+        func: tirx.PrimFunc,
         target: Target,
         _: bool,
     ) -> s_tir.Schedule | None:
@@ -719,7 +724,7 @@ class MatmulInt8Tensorization(GPUScheduleRule):
             get_wmma_intrin_group,
         )
 
-        if not isinstance(func, tir.PrimFunc) or not self.is_target_available(target):
+        if not isinstance(func, tirx.PrimFunc) or not self.is_target_available(target):
             return None
         sch = s_tir.Schedule(func)
         root_block = get_root_block(sch)
@@ -800,7 +805,12 @@ class MatmulInt8Tensorization(GPUScheduleRule):
         i0, i1, i2, i3 = sch.split(i, factors=i_factors)
         j0, j1, j2, j3 = sch.split(j, factors=j_factors)
         k0, k1 = sch.split(k, k_factors)
+<<<<<<< HEAD
         if target.arch.startswith("sm_") and int(target.arch[-2:]) > 75:
+=======
+        arch = target.attrs.get("arch", "")
+        if arch.startswith("sm_") and int(arch[-2:]) > 75:
+>>>>>>> upstream/mlc
             sch.annotate(k0, "software_pipeline_order", [0, 3, 1, 4, 5, 2, 6])
             sch.annotate(k0, "software_pipeline_stage", [0, 0, 0, 0, 0, 1, 1])
             sch.annotate(k1, "software_pipeline_order", [0, 1, 2])
@@ -828,7 +838,7 @@ class MatmulInt8Tensorization(GPUScheduleRule):
             sch.vectorize(f_3)
 
             sch.storage_align(block_read, 0, axis=-2, factor=32, offset=16)
-            sch.annotate(block_read, "tir.manifest_shared_memory_local_stage", 1)
+            sch.annotate(block_read, "tirx.manifest_shared_memory_local_stage", 1)
             sch.annotate(block_read, "double_buffer_scope", 0)
             return block_read
 
@@ -966,11 +976,11 @@ class Matmul(GPUScheduleRule):
 
     def apply(  # pylint: disable=too-many-locals,missing-docstring
         self,
-        func: tir.PrimFunc,
+        func: tirx.PrimFunc,
         target: Target,
         _: bool,
     ) -> s_tir.Schedule | None:
-        if not isinstance(func, tir.PrimFunc) or not self.is_target_available(target):
+        if not isinstance(func, tirx.PrimFunc) or not self.is_target_available(target):
             return None
         sch = s_tir.Schedule(func)
         config = self.get_configs(target)
@@ -1028,7 +1038,7 @@ class Matmul(GPUScheduleRule):
             # the batch dimension is not taken into consideration.
             for item_var in block_stmt.iter_vars[1:]:
                 extent = item_var.dom.extent
-                if isinstance(extent, tir.expr.IntImm):
+                if isinstance(extent, tirx.expr.IntImm):
                     if extent.value <= minimal_tensorize_threshold:
                         apply_tensorization = False
             if apply_tensorization:
@@ -1148,9 +1158,9 @@ class Matmul(GPUScheduleRule):
 
         mb, ms, n, k = reduction_loops
         if not (
-            isinstance(sch.get(n).extent, tir.IntImm)
-            and isinstance(sch.get(mb).extent, tir.IntImm)
-            and not isinstance(sch.get(ms).extent, tir.IntImm)
+            isinstance(sch.get(n).extent, tirx.IntImm)
+            and isinstance(sch.get(mb).extent, tirx.IntImm)
+            and not isinstance(sch.get(ms).extent, tirx.IntImm)
         ):
             return None
 

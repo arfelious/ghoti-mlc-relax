@@ -19,16 +19,16 @@ import pytest
 
 import tvm
 import tvm.testing
-from tvm import s_tir, te, tir
+from tvm import s_tir, te, tirx
 from tvm.script import ir as I
-from tvm.script import tir as T
+from tvm.script import tirx as T
 
 
 def _check(original, transformed):
     func = original
     mod = tvm.IRModule.from_expr(func.with_attr("global_symbol", "main"))
     mod = tvm.s_tir.transform.ConvertBlocksToOpaque()(mod)
-    mod = tvm.tir.transform.Simplify()(mod)
+    mod = tvm.tirx.transform.Simplify()(mod)
     tvm.ir.assert_structural_equal(mod["main"], transformed.with_attr("global_symbol", "main"))
 
 
@@ -40,7 +40,7 @@ def elementwise_func(a: T.handle, c: T.handle) -> None:
         with T.sblock():
             T.reads(A[i, 0:16])
             T.writes(C[i, 0:16])
-            B = T.alloc_buffer((16, 16), "float32")
+            B = T.sblock_alloc_buffer((16, 16), "float32")
             for j in range(0, 16):
                 with T.sblock():
                     vi = T.axis.S(16, i)
@@ -61,7 +61,7 @@ def substituted_elementwise_func(a: T.handle, c: T.handle) -> None:
         with T.sblock():
             T.reads(A[i, 0:16])
             T.writes(C[i, 0:16])
-            B = T.alloc_buffer([16, 16], "float32")
+            B = T.sblock_alloc_buffer([16, 16], "float32")
             for j in range(0, 16):
                 with T.sblock():
                     T.reads([A[i, j]])

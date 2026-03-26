@@ -22,9 +22,9 @@
 import math
 from typing import Any
 
-from tvm import s_tir, tir
+from tvm import s_tir, tirx
 from tvm.runtime import DataType
-from tvm.script import tir as T
+from tvm.script import tirx as T
 from tvm.target import Target
 
 from .position_embedding import switch_rope_freq_func
@@ -34,16 +34,16 @@ from .position_embedding import switch_rope_freq_func
 
 
 def _var(dtype):
-    return T.alloc_buffer((1,), dtype, scope="local")
+    return T.sblock_alloc_buffer((1,), dtype, scope="local")
 
 
 def _rope(
     buffer: T.Buffer,
-    offset: tir.Var,
+    offset: tirx.Var,
     rotary_dim: int,
-    theta: tir.Var,
-    scale: tir.Var,
-    indices: tuple[tir.Var, ...],
+    theta: tirx.Var,
+    scale: tirx.Var,
+    indices: tuple[tirx.Var, ...],
     qkv_dtype: str,
     rope_scaling: dict[str, Any],
 ):
@@ -52,14 +52,14 @@ def _rope(
         offset * scale, d, rotary_dim, theta, "float32"
     )
     cos = cos_freq * buffer[indices].astype("float32")
-    sin = sin_freq * tir.if_then_else(
+    sin = sin_freq * tirx.if_then_else(
         d < rotary_dim // 2,
         -buffer[indices[:-1] + (d + rotary_dim // 2,)],
         buffer[indices[:-1] + (d - rotary_dim // 2,)],
     ).astype("float32")
     expr = (cos + sin).astype(qkv_dtype)
     for var, value in var_map.items():
-        expr = tir.Let(var, value, expr)
+        expr = tirx.Let(var, value, expr)
     return expr
 
 
@@ -69,11 +69,11 @@ def _check_tree_order(tree_order_indptr, tree_order, batch, row, col, kv_len, qo
     tree_start = kv_len - tree_order_len
     child_idx_in_tree = row + tree_order_len - qo_len
     parent_idx_in_tree = col - tree_start
-    return tir.all(
+    return tirx.all(
         col < kv_len,
-        tir.any(
+        tirx.any(
             col < tree_start,
-            tir.all(
+            tirx.all(
                 tree_order[tree_order_indptr[batch] + child_idx_in_tree, 0]
                 >= tree_order[tree_order_indptr[batch] + parent_idx_in_tree, 0],
                 tree_order[tree_order_indptr[batch] + child_idx_in_tree, 0]
@@ -164,35 +164,35 @@ def tree_attn_cpu(h_kv, h_q, d, dtype, rope_scaling: dict[str, Any]):
         for b in T.serial(batch_size_plus_1 - 1):
             with T.sblock("attn"):
 
-                softmax_sum = T.alloc_buffer([h_q], "float32")
-                m_prev = T.alloc_buffer([h_q], "float32")
-                m_new = T.alloc_buffer([h_q], "float32")
-                d_prev = T.alloc_buffer([h_q], "float32")
-                d_new = T.alloc_buffer([h_q], "float32")
-                p_sum = T.alloc_buffer([d], "float32")
+                softmax_sum = T.sblock_alloc_buffer([h_q], "float32")
+                m_prev = T.sblock_alloc_buffer([h_q], "float32")
+                m_new = T.sblock_alloc_buffer([h_q], "float32")
+                d_prev = T.sblock_alloc_buffer([h_q], "float32")
+                d_new = T.sblock_alloc_buffer([h_q], "float32")
+                p_sum = T.sblock_alloc_buffer([d], "float32")
 
-                max_score = T.alloc_buffer([h_q], "float32")
-                attention_scores = T.alloc_buffer([kv_len, h_q], "float32")
-                exp_scores = T.alloc_buffer([kv_len, h_q], "float32")
-                attention_score = T.alloc_buffer(
+                max_score = T.sblock_alloc_buffer([h_q], "float32")
+                attention_scores = T.sblock_alloc_buffer([kv_len, h_q], "float32")
+                exp_scores = T.sblock_alloc_buffer([kv_len, h_q], "float32")
+                attention_score = T.sblock_alloc_buffer(
                     [
                         1,
                     ],
                     "float32",
                 )
-                query_val = T.alloc_buffer(
+                query_val = T.sblock_alloc_buffer(
                     [
                         1,
                     ],
                     "float32",
                 )
-                key_val = T.alloc_buffer(
+                key_val = T.sblock_alloc_buffer(
                     [
                         1,
                     ],
                     "float32",
                 )
-                result = T.alloc_buffer(
+                result = T.sblock_alloc_buffer(
                     [
                         1,
                     ],
@@ -392,21 +392,21 @@ def tree_attn(h_kv, h_q, d, dtype, rope_scaling: dict[str, Any], target: Target)
                             iterator = _var("int32")
                             kv_chunk_len = _var("int32")
 
-                            Q_smem = T.alloc_buffer((tile_x, d), dtype, scope="shared")
-                            K_smem = T.alloc_buffer((tile_z, d), dtype, scope="shared")
-                            V_smem = T.alloc_buffer((tile_z, d), dtype, scope="shared")
-                            S_smem = T.alloc_buffer((tile_x, tile_z), "float32", scope="shared")
+                            Q_smem = T.sblock_alloc_buffer((tile_x, d), dtype, scope="shared")
+                            K_smem = T.sblock_alloc_buffer((tile_z, d), dtype, scope="shared")
+                            V_smem = T.sblock_alloc_buffer((tile_z, d), dtype, scope="shared")
+                            S_smem = T.sblock_alloc_buffer((tile_x, tile_z), "float32", scope="shared")
 
-                            S_local = T.alloc_buffer((tile_x, tile_z), "float32", scope="local")
-                            O_local = T.alloc_buffer((tile_x, d), "float32", scope="local")
+                            S_local = T.sblock_alloc_buffer((tile_x, tile_z), "float32", scope="local")
+                            O_local = T.sblock_alloc_buffer((tile_x, d), "float32", scope="local")
 
-                            m_smem = T.alloc_buffer((tile_x, ), "float32", scope="shared")
-                            m_prev_smem = T.alloc_buffer((tile_x, ), "float32", scope="shared")
-                            d_smem = T.alloc_buffer((tile_x, ), "float32", scope="shared")
+                            m_smem = T.sblock_alloc_buffer((tile_x, ), "float32", scope="shared")
+                            m_prev_smem = T.sblock_alloc_buffer((tile_x, ), "float32", scope="shared")
+                            d_smem = T.sblock_alloc_buffer((tile_x, ), "float32", scope="shared")
 
-                            m_new = T.alloc_buffer((math.ceil(tile_x / (bdx * num_warps)),), "float32", scope="local")
-                            m_prev = T.alloc_buffer((math.ceil(tile_x / (bdx * num_warps)),), "float32", scope="local")
-                            d_new = T.alloc_buffer((math.ceil(tile_x / (bdx * num_warps)),), "float32", scope="local")
+                            m_new = T.sblock_alloc_buffer((math.ceil(tile_x / (bdx * num_warps)),), "float32", scope="local")
+                            m_prev = T.sblock_alloc_buffer((math.ceil(tile_x / (bdx * num_warps)),), "float32", scope="local")
+                            d_new = T.sblock_alloc_buffer((math.ceil(tile_x / (bdx * num_warps)),), "float32", scope="local")
 
                             ## get tile_no, batch_idx, batch_tiles, batch_rows
                             tile_id[0] = bx
@@ -648,7 +648,7 @@ def tree_attn(h_kv, h_q, d, dtype, rope_scaling: dict[str, Any], target: Target)
     apply_to_qkv_load(sch, sch.get_sblock("KV_load"))
 
     apply_to_md(sch, sch.get_sblock("lse_store"))
-    return sch.mod["main"].with_attr("tir.is_scheduled", True)
+    return sch.mod["main"].with_attr("tirx.is_scheduled", True)
 
 
 def tree_attn_with_paged_kv_cache_cpu(h_kv, h_q, d, dtype, rope_scaling: dict[str, Any]):
@@ -756,19 +756,19 @@ def tree_attn_with_paged_kv_cache_cpu(h_kv, h_q, d, dtype, rope_scaling: dict[st
                 with T.sblock("attn"):
                     T.reads()
                     T.writes()
-                    O_local = T.alloc_buffer((d, ), "float32")
-                    Q_local = T.alloc_buffer((d, ), "float32")
-                    K_local = T.alloc_buffer((d, ), "float32")
-                    V_local = T.alloc_buffer((d, ), "float32")
+                    O_local = T.sblock_alloc_buffer((d, ), "float32")
+                    Q_local = T.sblock_alloc_buffer((d, ), "float32")
+                    K_local = T.sblock_alloc_buffer((d, ), "float32")
+                    V_local = T.sblock_alloc_buffer((d, ), "float32")
 
-                    kv_chunk_len = T.alloc_buffer((1, ), "int32")
+                    kv_chunk_len = T.sblock_alloc_buffer((1, ), "int32")
 
-                    m_val = T.alloc_buffer((1, ), "float32")
-                    new_m = T.alloc_buffer((1, ), "float32")
-                    d_val = T.alloc_buffer((1, ), "float32")
-                    S_val = T.alloc_buffer((1, ), "float32")
-                    scale_O = T.alloc_buffer((1, ), "float32")
-                    factor = T.alloc_buffer((1, ), "float32")
+                    m_val = T.sblock_alloc_buffer((1, ), "float32")
+                    new_m = T.sblock_alloc_buffer((1, ), "float32")
+                    d_val = T.sblock_alloc_buffer((1, ), "float32")
+                    S_val = T.sblock_alloc_buffer((1, ), "float32")
+                    scale_O = T.sblock_alloc_buffer((1, ), "float32")
+                    factor = T.sblock_alloc_buffer((1, ), "float32")
                     cur_page_indptr_begin: T.int32 = page_indptr[b_idx]
                     cur_page_indptr_end: T.int32 = page_indptr[b_idx + 1]
                     kv_chunk_len[0] = T.if_then_else(
@@ -1009,25 +1009,25 @@ def tree_attn_with_paged_kv_cache(
                             iterator = _var("int32")
                             kv_chunk_len = _var("int32")
 
-                            Q_smem = T.alloc_buffer((tile_x, d), dtype, scope="shared")
-                            K_smem = T.alloc_buffer((tile_z, d), dtype, scope="shared")
-                            V_smem = T.alloc_buffer((tile_z, d), dtype, scope="shared")
-                            S_smem = T.alloc_buffer((tile_x, tile_z), "float32", scope="shared")
+                            Q_smem = T.sblock_alloc_buffer((tile_x, d), dtype, scope="shared")
+                            K_smem = T.sblock_alloc_buffer((tile_z, d), dtype, scope="shared")
+                            V_smem = T.sblock_alloc_buffer((tile_z, d), dtype, scope="shared")
+                            S_smem = T.sblock_alloc_buffer((tile_x, tile_z), "float32", scope="shared")
 
-                            S_local = T.alloc_buffer((tile_x, tile_z), "float32", scope="local")
-                            O_local = T.alloc_buffer((tile_x, d), "float32", scope="local")
+                            S_local = T.sblock_alloc_buffer((tile_x, tile_z), "float32", scope="local")
+                            O_local = T.sblock_alloc_buffer((tile_x, d), "float32", scope="local")
 
-                            m_smem = T.alloc_buffer((tile_x,), "float32", scope="shared")
-                            m_prev_smem = T.alloc_buffer((tile_x,), "float32", scope="shared")
-                            d_smem = T.alloc_buffer((tile_x,), "float32", scope="shared")
+                            m_smem = T.sblock_alloc_buffer((tile_x,), "float32", scope="shared")
+                            m_prev_smem = T.sblock_alloc_buffer((tile_x,), "float32", scope="shared")
+                            d_smem = T.sblock_alloc_buffer((tile_x,), "float32", scope="shared")
 
-                            m_new = T.alloc_buffer(
+                            m_new = T.sblock_alloc_buffer(
                                 (math.ceil(tile_x / (bdx * num_warps)),), "float32", scope="local"
                             )
-                            m_prev = T.alloc_buffer(
+                            m_prev = T.sblock_alloc_buffer(
                                 (math.ceil(tile_x / (bdx * num_warps)),), "float32", scope="local"
                             )
-                            d_new = T.alloc_buffer(
+                            d_new = T.sblock_alloc_buffer(
                                 (math.ceil(tile_x / (bdx * num_warps)),), "float32", scope="local"
                             )
 
@@ -1341,4 +1341,4 @@ def tree_attn_with_paged_kv_cache(
     apply_to_qkv_load(sch, sch.get_sblock("K_load"))
     apply_to_qkv_load(sch, sch.get_sblock("V_load"))
     apply_to_md(sch, sch.get_sblock("lse_store"))
-    return sch.mod["main"].with_attr("tir.is_scheduled", True)
+    return sch.mod["main"].with_attr("tirx.is_scheduled", True)

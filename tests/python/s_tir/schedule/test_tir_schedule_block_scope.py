@@ -22,10 +22,10 @@ import pytest
 
 import tvm
 import tvm.testing
-from tvm import s_tir, tir
+from tvm import s_tir, tirx
 from tvm.s_tir.schedule import DepKind
-from tvm.script import tir as T
-from tvm.tir.stmt_functor import post_order_visit
+from tvm.script import tirx as T
+from tvm.tirx.stmt_functor import post_order_visit
 
 # pylint: disable=no-member,invalid-name,unused-variable
 
@@ -34,7 +34,7 @@ from tvm.tir.stmt_functor import post_order_visit
 def elementwise(a: T.handle, c: T.handle) -> None:
     A = T.match_buffer(a, (128, 128), "float32")
     C = T.match_buffer(c, (128, 128), "float32")
-    B = T.alloc_buffer((128, 128), "float32")
+    B = T.sblock_alloc_buffer((128, 128), "float32")
     for i, j in T.grid(128, 128):
         with T.sblock("B"):
             vi, vj = T.axis.remap("SS", [i, j])
@@ -85,12 +85,12 @@ def _get_sblock(s: s_tir.ScheduleState, name_hint: str) -> s_tir.StmtSRef:
 
     def f_visit(node):
         nonlocal result
-        if isinstance(node, tvm.tir.SBlock) and node.name_hint == name_hint:
+        if isinstance(node, tvm.tirx.SBlock) and node.name_hint == name_hint:
             result = node
 
     func = s.mod["main"]
     post_order_visit(func.body, f_visit)
-    assert result is not None and isinstance(result, tvm.tir.SBlock)
+    assert result is not None and isinstance(result, tvm.tirx.SBlock)
     return s.get_sref(result)
 
 

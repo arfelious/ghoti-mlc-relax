@@ -26,10 +26,10 @@
 #include <tvm/ffi/function.h>
 #include <tvm/ffi/reflection/registry.h>
 #include <tvm/s_tir/transform.h>
-#include <tvm/tir/builtin.h>
-#include <tvm/tir/expr.h>
-#include <tvm/tir/op.h>
-#include <tvm/tir/stmt_functor.h>
+#include <tvm/tirx/builtin.h>
+#include <tvm/tirx/expr.h>
+#include <tvm/tirx/op.h>
+#include <tvm/tirx/stmt_functor.h>
 
 #include <unordered_map>
 #include <utility>
@@ -39,7 +39,7 @@
 
 namespace tvm {
 namespace s_tir {
-using namespace tvm::tir;
+using namespace tvm::tirx;
 
 // TODO(Lunderberg): Move this pass to be before
 // FlattenBuffer.  That will simplify this pass,
@@ -49,7 +49,7 @@ class BoundCollector : public StmtVisitor {
   BoundCollector() {}
 
   void VisitStmt_(const AttrStmtNode* op) final {
-    if (op->attr_key == tir::attr::buffer_bound) {
+    if (op->attr_key == tirx::attr::buffer_bound) {
       const VarNode* key = op->node.as<VarNode>();
       const CallNode* container = op->value.as<CallNode>();
       if (key && container) {
@@ -68,10 +68,9 @@ class BoundChecker : public StmtExprMutator {
       const std::unordered_map<const VarNode*, ffi::Array<PrimExpr>>& mem_to_shape)
       : mem_to_shape_(mem_to_shape) {}
 
-  Stmt VisitStmt_(const AllocateNode* op) final {
-    // If the shape was updated we should update the hashtable.
-    if (UpdateIsNeeded(op->buffer_var)) {
-      Update(op->buffer_var, op->extents, op->dtype);
+  Stmt VisitStmt_(const AllocBufferNode* op) final {
+    if (UpdateIsNeeded(op->buffer->data)) {
+      Update(op->buffer->data, op->buffer->shape, op->buffer->dtype);
     }
     return StmtExprMutator::VisitStmt_(op);
   }
@@ -97,7 +96,8 @@ class BoundChecker : public StmtExprMutator {
       PrimExpr condition = MakeCondition();
       if (!condition.as<StringImmNode>()) {
         Stmt then_case = ffi::GetRef<Stmt>(op);
-        Stmt else_case = AssertStmt(condition, StringImm(error_message_));
+        Stmt else_case =
+            AssertStmt(condition, StringImm("RuntimeError"), {StringImm(error_message_)});
         Stmt body = IfThenElse(condition, then_case, else_case);
         return body;
       }

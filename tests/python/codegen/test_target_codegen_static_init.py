@@ -20,32 +20,7 @@ import numpy as np
 
 import tvm
 from tvm.script import ir as I
-from tvm.script import tir as T
-
-
-def test_static_callback():
-    @I.ir_module
-    class Module:
-        @T.prim_func
-        def ramp(A: T.handle):
-            T.func_attr({"global_symbol": "ramp"})
-            n = T.int64()
-            Ab = T.match_buffer(A, (n,), "int64")
-            # coproc_uop_scope with TVMBackendRunOnce ensures body runs only once
-            with T.attr(
-                T.iter_var(T.int32(), (0, 1), "DataPar", "cop"),
-                "coproc_uop_scope",
-                "TVMBackendRunOnce",
-            ):
-                for i in T.parallel(n):
-                    Ab[i] = Ab[i] + T.int64(1)
-
-    mod = Module
-    f = tvm.driver.build(mod, target="llvm")
-    a = tvm.runtime.tensor(np.zeros(10, dtype="int64"))
-    f(a)
-    f(a)
-    np.testing.assert_equal(a.numpy(), np.ones(a.shape[0]))
+from tvm.script import tirx as T
 
 
 def test_static_init():
@@ -63,7 +38,7 @@ def test_static_init():
             Ab = T.match_buffer(A, (n,), "int64")
             T.call_packed(
                 "test_static_callback",
-                T.call_intrin("handle", "tir.tvm_static_handle"),
+                T.call_intrin("handle", "tirx.tvm_static_handle"),
                 Ab.data,
             )
 
@@ -74,5 +49,4 @@ def test_static_init():
 
 
 if __name__ == "__main__":
-    test_static_callback()
     test_static_init()

@@ -22,13 +22,13 @@ import pytest
 
 import tvm
 import tvm.testing
-from tvm import tir
+from tvm import tirx
 from tvm.ir import IRModule
 from tvm.s_tir.schedule.testing import (
     assert_structural_equal_ignore_global_symbol,
     verify_trace_roundtrip,
 )
-from tvm.script import tir as T
+from tvm.script import tirx as T
 
 # pylint: disable=no-member,invalid-name,unused-variable
 
@@ -52,7 +52,7 @@ def matmul(a: T.handle, b: T.handle, c: T.handle) -> None:
 def matmul_relu(a: T.handle, b: T.handle, d: T.handle) -> None:
     A = T.match_buffer(a, (1024, 1024))
     B = T.match_buffer(b, (1024, 1024))
-    C = T.alloc_buffer((1024, 1024))
+    C = T.sblock_alloc_buffer((1024, 1024))
     D = T.match_buffer(d, (1024, 1024))
     for i, j, k in T.grid(1024, 1024, 1024):
         with T.sblock("matmul"):
@@ -70,7 +70,7 @@ def matmul_relu(a: T.handle, b: T.handle, d: T.handle) -> None:
 def matmul_relu_ann1(a: T.handle, b: T.handle, d: T.handle) -> None:
     A = T.match_buffer(a, (1024, 1024))
     B = T.match_buffer(b, (1024, 1024))
-    C = T.alloc_buffer((1024, 1024))
+    C = T.sblock_alloc_buffer((1024, 1024))
     D = T.match_buffer(d, (1024, 1024))
     for i in T.serial(0, 1024, annotations={"test1": "aaa", "test4": {"arr": [0, 0], "key": 3}}):
         for j in T.serial(0, 1024, annotations={"test2": 612, "test3": ["aa", 1]}):
@@ -90,7 +90,7 @@ def matmul_relu_ann1(a: T.handle, b: T.handle, d: T.handle) -> None:
 def matmul_relu_ann2(a: T.handle, b: T.handle, d: T.handle) -> None:
     A = T.match_buffer(a, (1024, 1024))
     B = T.match_buffer(b, (1024, 1024))
-    C = T.alloc_buffer((1024, 1024))
+    C = T.sblock_alloc_buffer((1024, 1024))
     D = T.match_buffer(d, (1024, 1024))
     for i, j, k in T.grid(1024, 1024, 1024):
         with T.sblock("matmul"):
@@ -132,13 +132,13 @@ class ModuleWithMultipleFuncs:
 @T.prim_func
 def tuple_reduction(data: T.Buffer((4, 32), "float32"), T_add: T.Buffer((4,), "float32")) -> None:
     # function attr dict
-    T.func_attr({"global_symbol": "main", "tir.noalias": True})
+    T.func_attr({"global_symbol": "main", "tirx.noalias": True})
     # body
     with T.sblock("root"):
         T.reads()
         T.writes()
-        data_red_temp_v0 = T.alloc_buffer([4], dtype="float32")
-        data_red_temp_v1 = T.alloc_buffer([4], dtype="float32")
+        data_red_temp_v0 = T.sblock_alloc_buffer([4], dtype="float32")
+        data_red_temp_v1 = T.sblock_alloc_buffer([4], dtype="float32")
         for i0, i1 in T.grid(4, 32):
             with T.sblock("data_red_temp"):
                 ax0, k1 = T.axis.remap("SR", [i0, i1])

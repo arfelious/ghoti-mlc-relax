@@ -25,15 +25,16 @@
 
 #include <tvm/arith/analyzer.h>
 #include <tvm/ffi/function.h>
-#include <tvm/tir/index_map.h>
-#include <tvm/tir/stmt_functor.h>
+#include <tvm/s_tir/stmt.h>
+#include <tvm/tirx/index_map.h>
+#include <tvm/tirx/stmt_functor.h>
 
 #include <cmath>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "../../tir/transform/ir_utils.h"
+#include "../../tirx/transform/ir_utils.h"
 #include "literal/cuda_half_t.h"
 #include "literal/cuda_int8_t.h"
 #include "ptx.h"
@@ -156,10 +157,10 @@ void CodeGenCUDA::PrintFunctionSignature(const ffi::String& function_name, const
   CodeGenC::PrintFunctionSignature(function_name, func, os);
 }
 
-class ThreadIdxExtractor : public tir::StmtVisitor {
+class ThreadIdxExtractor : public tirx::StmtVisitor {
  private:
   void VisitStmt_(const AttrStmtNode* op) final {
-    if (op->attr_key == tir::attr::thread_extent) {
+    if (op->attr_key == tirx::attr::thread_extent) {
       IterVar iv = Downcast<IterVar>(op->node);
       if (iv->var->name_hint == "threadIdx.x" || iv->thread_tag == "threadIdx.x") {
         threadIdx_x_ext = op->value;
@@ -326,8 +327,8 @@ std::string CodeGenCUDA::Finish() {
   return CodeGenC::Finish();
 }
 
-void CodeGenCUDA::VisitStmt_(const tir::ForNode* op) {
-  if (op->kind == tir::ForKind::kUnrolled) {
+void CodeGenCUDA::VisitStmt_(const tirx::ForNode* op) {
+  if (op->kind == tirx::ForKind::kUnrolled) {
     PrintIndent();
     stream << "#pragma unroll\n";
   }
@@ -1119,7 +1120,7 @@ void CodeGenCUDA::VisitExpr_(const CallNode* op, std::ostream& os) {
     // to determine the output location for each 8 element.
 
     const auto index_map_func =
-        tvm::ffi::Function::GetGlobal("tir.index_map.shared_16x16_to_ldmatrix_32x8_layout");
+        tvm::ffi::Function::GetGlobal("tirx.index_map.shared_16x16_to_ldmatrix_32x8_layout");
     TVM_FFI_ICHECK(index_map_func.has_value());
 
     arith::Analyzer analyzer;
@@ -1133,10 +1134,10 @@ void CodeGenCUDA::VisitExpr_(const CallNode* op, std::ostream& os) {
     class LowerFloorDivMod : public ExprMutator {
      public:
       PrimExpr VisitExpr_(const FloorDivNode* op) {
-        return tir::Div(this->VisitExpr(op->a), this->VisitExpr(op->b));
+        return tirx::Div(this->VisitExpr(op->a), this->VisitExpr(op->b));
       }
       PrimExpr VisitExpr_(const FloorModNode* op) {
-        return tir::Mod(this->VisitExpr(op->a), this->VisitExpr(op->b));
+        return tirx::Mod(this->VisitExpr(op->a), this->VisitExpr(op->b));
       }
     };
 
@@ -1299,44 +1300,44 @@ void CodeGenCUDA::VisitExpr_(const CallNode* op, std::ostream& os) {
       if (tgt_dtype.is_float4_e2m1fn()) {
         // We view the source as an uint16, and then extract bits of two fp4 numbers,
         // and finally reinterpret the result as fp4x2.
-        value = tir::Call(DataType::UInt(16), tir::builtin::reinterpret(), {value});
-        tir::Var temp_var("temp_var", DataType::UInt(16));
-        value = tir::Let(
-            temp_var, value,
-            tir::Cast(DataType::UInt(8), (temp_var & IntImm(DataType::UInt(16), 0xF)) |
-                                             ((temp_var >> 4) & IntImm(DataType::UInt(16), 0xF0))));
+        value = tirx::Call(DataType::UInt(16), tirx::builtin::reinterpret(), {value});
+        tirx::Var temp_var("temp_var", DataType::UInt(16));
+        value = tirx::Let(temp_var, value,
+                          tirx::Cast(DataType::UInt(8),
+                                     (temp_var & IntImm(DataType::UInt(16), 0xF)) |
+                                         ((temp_var >> 4) & IntImm(DataType::UInt(16), 0xF0))));
       } else {
-        value = tir::Cast(DataType::UInt(16),
-                          tir::Call(DataType::UInt(8), tir::builtin::reinterpret(), {value}));
-        tir::Var temp_var("temp_var", DataType::UInt(16));
-        value = tir::Let(temp_var, value,
-                         (temp_var & IntImm(DataType::UInt(16), 0xF)) |
-                             ((temp_var & IntImm(DataType::UInt(16), 0xF0)) << 4));
+        value = tirx::Cast(DataType::UInt(16),
+                           tirx::Call(DataType::UInt(8), tirx::builtin::reinterpret(), {value}));
+        tirx::Var temp_var("temp_var", DataType::UInt(16));
+        value = tirx::Let(temp_var, value,
+                          (temp_var & IntImm(DataType::UInt(16), 0xF)) |
+                              ((temp_var & IntImm(DataType::UInt(16), 0xF0)) << 4));
       }
-      os << PrintExpr(tir::Call(tgt_dtype, tir::builtin::reinterpret(), {value}));
+      os << PrintExpr(tirx::Call(tgt_dtype, tirx::builtin::reinterpret(), {value}));
     } else if (lanes == 4) {
       if (tgt_dtype.is_float4_e2m1fn()) {
         // We view the source as an uint32, and then extract bits of four fp4 numbers,
         // and finally reinterpret the result as fp4x4.
-        value = tir::Call(DataType::UInt(32), tir::builtin::reinterpret(), {value});
-        tir::Var temp_var("temp_var", DataType::UInt(32));
-        value = tir::Let(temp_var, value,
-                         tir::Cast(DataType::UInt(16),
-                                   (temp_var & IntImm(DataType::UInt(32), 0xF)) |
-                                       ((temp_var >> 4) & IntImm(DataType::UInt(32), 0xF0)) |
-                                       ((temp_var >> 8) & IntImm(DataType::UInt(32), 0xF00)) |
-                                       ((temp_var >> 12) & IntImm(DataType::UInt(32), 0xF000))));
+        value = tirx::Call(DataType::UInt(32), tirx::builtin::reinterpret(), {value});
+        tirx::Var temp_var("temp_var", DataType::UInt(32));
+        value = tirx::Let(temp_var, value,
+                          tirx::Cast(DataType::UInt(16),
+                                     (temp_var & IntImm(DataType::UInt(32), 0xF)) |
+                                         ((temp_var >> 4) & IntImm(DataType::UInt(32), 0xF0)) |
+                                         ((temp_var >> 8) & IntImm(DataType::UInt(32), 0xF00)) |
+                                         ((temp_var >> 12) & IntImm(DataType::UInt(32), 0xF000))));
       } else {
-        value = tir::Cast(DataType::UInt(32),
-                          tir::Call(DataType::UInt(16), tir::builtin::reinterpret(), {value}));
-        tir::Var temp_var("temp_var", DataType::UInt(32));
-        value = tir::Let(temp_var, value,
-                         (temp_var & IntImm(DataType::UInt(32), 0xF)) |
-                             ((temp_var & IntImm(DataType::UInt(32), 0xF0)) << 4) |
-                             ((temp_var & IntImm(DataType::UInt(32), 0xF00)) << 8) |
-                             ((temp_var & IntImm(DataType::UInt(32), 0xF000)) << 12));
+        value = tirx::Cast(DataType::UInt(32),
+                           tirx::Call(DataType::UInt(16), tirx::builtin::reinterpret(), {value}));
+        tirx::Var temp_var("temp_var", DataType::UInt(32));
+        value = tirx::Let(temp_var, value,
+                          (temp_var & IntImm(DataType::UInt(32), 0xF)) |
+                              ((temp_var & IntImm(DataType::UInt(32), 0xF0)) << 4) |
+                              ((temp_var & IntImm(DataType::UInt(32), 0xF00)) << 8) |
+                              ((temp_var & IntImm(DataType::UInt(32), 0xF000)) << 12));
       }
-      os << PrintExpr(tir::Call(tgt_dtype, tir::builtin::reinterpret(), {value}));
+      os << PrintExpr(tirx::Call(tgt_dtype, tirx::builtin::reinterpret(), {value}));
     } else {
       TVM_FFI_THROW(InternalError)
           << "Invalid number of lanes for float4_e2m1fn reinterpret: " << lanes;
@@ -1350,15 +1351,15 @@ void CodeGenCUDA::VisitExpr_(const CallNode* op, std::ostream& os) {
 }
 
 void CodeGenCUDA::VisitStmt_(const AttrStmtNode* op) {
-  if (op->attr_key == tir::attr::fragment_shape) {
+  if (op->attr_key == s_tir::attr::fragment_shape) {
     const VarNode* buffer = op->node.as<VarNode>();
     const StringImmNode* shape_str = op->value.as<StringImmNode>();
     fragment_shapes[buffer] = shape_str->value;
-  } else if (op->attr_key == tir::attr::fragment_layout) {
+  } else if (op->attr_key == s_tir::attr::fragment_layout) {
     const VarNode* buffer = op->node.as<VarNode>();
     const StringImmNode* layout_str = op->value.as<StringImmNode>();
     fragment_layouts[buffer] = layout_str->value;
-  } else if (op->attr_key == tir::attr::async_commit_queue_scope) {
+  } else if (op->attr_key == s_tir::attr::async_commit_queue_scope) {
     const IntImmNode* queue_id = op->value.as<IntImmNode>();
     TVM_FFI_ICHECK(queue_id && queue_id->value == 0)
         << "For CUDA, the index of an async queue must be 0.";
@@ -1366,7 +1367,7 @@ void CodeGenCUDA::VisitStmt_(const AttrStmtNode* op) {
     auto commit_group = Call(DataType::Void(), builtin::ptx_commit_group(), {});
     this->VisitExpr(commit_group, this->stream);
     return;
-  } else if (op->attr_key == tir::attr::async_wait_queue_scope) {
+  } else if (op->attr_key == s_tir::attr::async_wait_queue_scope) {
     auto wait_attrs = GetAsyncWaitAttributes(op);
     auto queue_id = wait_attrs.first.as<IntImmNode>();
     TVM_FFI_ICHECK(queue_id && queue_id->value == 0)
@@ -1382,51 +1383,60 @@ void CodeGenCUDA::VisitStmt_(const AttrStmtNode* op) {
   CodeGenC::VisitStmt_(op);
 }
 
-void CodeGenCUDA::VisitStmt_(const AllocateNode* op) {
-  TVM_FFI_ICHECK(!is_zero(op->condition));
-  std::string vid = AllocVarID(op->buffer_var.get());
+void CodeGenCUDA::VisitStmt_(const AllocBufferNode* op) {
+  TVM_FFI_ICHECK(op->buffer.defined());
+  std::string vid = AllocVarID(op->buffer->data.get());
 
   this->PrintIndent();
-  std::string scope = GetPtrStorageScope(op->buffer_var);
-  const VarNode* buffer = op->buffer_var.as<VarNode>();
+  std::string scope = GetPtrStorageScope(op->buffer->data);
+  const VarNode* buffer = op->buffer->data.as<VarNode>();
+  DataType dtype = op->buffer->dtype;
+
   if (scope.find("wmma.") == 0) {
     if (scope == "wmma.matrix_a" || scope == "wmma.matrix_b") {
-      TVM_FFI_ICHECK(op->dtype == DataType::Float(16) || op->dtype == DataType::Int(8) ||
-                     op->dtype == DataType::UInt(8) || op->dtype == DataType::Int(4) ||
-                     op->dtype == DataType::UInt(4) || op->dtype == DataType::Int(1) ||
-                     op->dtype == DataType::BFloat(16))
+      TVM_FFI_ICHECK(dtype == DataType::Float(16) || dtype == DataType::Int(8) ||
+                     dtype == DataType::UInt(8) || dtype == DataType::Int(4) ||
+                     dtype == DataType::UInt(4) || dtype == DataType::Int(1) ||
+                     dtype == DataType::BFloat(16))
           << "Matrix_a and matrix_b only support half or char or unsigned char "
           << "or uint4 or int4 or int1 type for now";
     } else {
-      TVM_FFI_ICHECK(op->dtype == DataType::Float(16) || op->dtype == DataType::Float(32) ||
-                     op->dtype == DataType::Int(32))
+      TVM_FFI_ICHECK(dtype == DataType::Float(16) || dtype == DataType::Float(32) ||
+                     dtype == DataType::Int(32))
           << "Accumulator only support half, float and int type for now";
     }
-    PrintWmmaScope(scope, op->dtype, buffer, stream);
+    PrintWmmaScope(scope, dtype, buffer, stream);
   } else {
     PrintStorageScope(scope, stream);
-    PrintType(op->dtype, stream);
+    PrintType(dtype, stream);
   }
 
   if (scope == "shared.dyn") {
     stream << ' ' << vid << "[];\n";
   } else {
-    size_t constant_size = op->ConstantAllocationSize();
+    // Compute constant_size from buffer shape
+    size_t constant_size = 1;
+    for (const auto& dim : op->buffer->shape) {
+      const IntImmNode* dim_imm = dim.as<IntImmNode>();
+      TVM_FFI_ICHECK(dim_imm) << "Can only handle constant size stack allocation for now";
+      constant_size *= dim_imm->value;
+    }
     TVM_FFI_ICHECK_GT(constant_size, 0) << "Can only handle constant size stack allocation for now";
 
     if (scope.find("wmma.") == 0) {
       constant_size = GetWmmaFragmentSize(scope, buffer, constant_size);
     }
-    if ((op->dtype == DataType::Int(4) || op->dtype == DataType::UInt(4) ||
-         op->dtype == DataType::Int(1)) &&
+    if ((dtype == DataType::Int(4) || dtype == DataType::UInt(4) || dtype == DataType::Int(1)) &&
         scope == "shared") {
-      constant_size = constant_size / (32 / op->dtype.bits());
+      constant_size = constant_size / (32 / dtype.bits());
     }
     stream << ' ' << vid << '[' << constant_size << "];\n";
   }
 
-  RegisterHandleType(op->buffer_var.get(), op->dtype);
-  this->PrintStmt(op->body);
+  RegisterHandleType(op->buffer->data.get(), dtype);
+  if (op->annotations.count(tirx::attr::kVolatile)) {
+    MarkVolatile(op->buffer->data.get());
+  }
 }
 
 void CodeGenCUDA::VisitStmt_(const EvaluateNode* op) {

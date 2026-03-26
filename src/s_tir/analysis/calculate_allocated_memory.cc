@@ -18,7 +18,7 @@
  */
 
 /*!
- * \file tir/analysis/calculate_allocated_memory.cc
+ * \file tirx/analysis/calculate_allocated_memory.cc
  * \brief Calculate allocated memory per memory scope required by PrimFuncs.
  */
 #include <tvm/arith/analyzer.h>
@@ -26,10 +26,10 @@
 #include <tvm/ffi/reflection/registry.h>
 #include <tvm/runtime/device_api.h>
 #include <tvm/s_tir/transform.h>
-#include <tvm/tir/analysis.h>
-#include <tvm/tir/function.h>
-#include <tvm/tir/stmt_functor.h>
-#include <tvm/tir/transform.h>
+#include <tvm/tirx/analysis.h>
+#include <tvm/tirx/function.h>
+#include <tvm/tirx/stmt_functor.h>
+#include <tvm/tirx/transform.h>
 
 #include <algorithm>
 #include <map>
@@ -37,29 +37,7 @@
 
 namespace tvm {
 namespace s_tir {
-using namespace tvm::tir;
-
-template <typename T>
-class AllocationCalculator : public StmtExprVisitor {
- public:
-  AllocationCalculator() = default;
-  tvm::ffi::Map<ffi::String, Integer> operator()(const PrimFunc& func);
-
- private:
-  void VisitStmt_(const T* op) override;
-  std::unordered_map<std::string, int64_t> _max_size;
-  std::unordered_map<std::string, int64_t> _current_size;
-};
-
-template <typename T>
-tvm::ffi::Map<ffi::String, Integer> AllocationCalculator<T>::operator()(const PrimFunc& func) {
-  this->VisitStmt(func->body);
-  tvm::ffi::Map<ffi::String, Integer> res;
-  for (auto [k, v] : _max_size) {
-    res.Set(ffi::String(k), Integer(v));
-  }
-  return res;
-}
+using namespace tvm::tirx;
 
 std::string GetStorageScope(const Var& var) {
   auto* ptr = var->type_annotation.as<PointerTypeNode>();
@@ -67,25 +45,66 @@ std::string GetStorageScope(const Var& var) {
   return ptr->storage_scope;
 }
 
-template <typename T>
-void AllocationCalculator<T>::VisitStmt_(const T* op) {
-  std::string storage_scope = GetStorageScope(op->buffer_var);
-  auto search = _current_size.find(storage_scope);
-  if (search == _current_size.end()) {
-    _current_size[storage_scope] = 0;
-    _max_size[storage_scope] = 0;
+/*!
+ * \brief Allocation calculator for AllocBufferNode.
+ */
+class AllocBufferCalculator : public StmtExprVisitor {
+ public:
+  tvm::ffi::Map<ffi::String, Integer> operator()(const PrimFunc& func) {
+    this->VisitStmt(func->body);
+    tvm::ffi::Map<ffi::String, Integer> res;
+    for (auto [k, v] : _max_size) {
+      res.Set(ffi::String(k), Integer(v));
+    }
+    return res;
   }
-  auto size = op->ConstantAllocationSize() * op->dtype.bytes() * op->dtype.lanes();
-  _current_size[storage_scope] += size;
-  _max_size[storage_scope] = std::max(_current_size[storage_scope], _max_size[storage_scope]);
-  StmtExprVisitor::VisitStmt(op->body);
-  _current_size[storage_scope] -= size;
-}
+
+ private:
+  void VisitStmt_(const AllocBufferNode* op) override {
+    std::string storage_scope = GetStorageScope(op->buffer->data);
+    auto search = _current_size.find(storage_scope);
+    if (search == _current_size.end()) {
+      _current_size[storage_scope] = 0;
+      _max_size[storage_scope] = 0;
+    }
+    int64_t size = 1;
+    for (const PrimExpr& e : op->buffer->shape) {
+      if (auto* imm = e.as<IntImmNode>()) {
+        size *= imm->value;
+      } else {
+        size = 0;
+        break;
+      }
+    }
+    size *= op->buffer->dtype.bytes() * op->buffer->dtype.lanes();
+    _current_size[storage_scope] += size;
+    _max_size[storage_scope] = std::max(_current_size[storage_scope], _max_size[storage_scope]);
+    StmtExprVisitor::VisitStmt_(op);
+  }
+  void VisitStmt_(const ForNode* op) override {
+    auto snapshot = _current_size;
+    StmtExprVisitor::VisitStmt_(op);
+    _current_size = snapshot;
+  }
+  void VisitStmt_(const IfThenElseNode* op) override {
+    auto snapshot = _current_size;
+    StmtExprVisitor::VisitStmt_(op);
+    _current_size = snapshot;
+  }
+  void VisitStmt_(const AttrStmtNode* op) override {
+    auto snapshot = _current_size;
+    StmtExprVisitor::VisitStmt_(op);
+    _current_size = snapshot;
+  }
+  std::unordered_map<std::string, int64_t> _max_size;
+  std::unordered_map<std::string, int64_t> _current_size;
+};
 
 tvm::ffi::Map<ffi::String, tvm::ffi::Map<ffi::String, Integer> > CalculateAllocatedBytes(
     const PrimFunc& func) {
   tvm::ffi::Map<ffi::String, tvm::ffi::Map<ffi::String, Integer> > results;
-  results.Set("main", AllocationCalculator<AllocateNode>()(func));
+  auto alloc_buffer_result = AllocBufferCalculator()(func);
+  results.Set("main", alloc_buffer_result);
   return results;
 }
 
@@ -93,9 +112,10 @@ tvm::ffi::Map<ffi::String, tvm::ffi::Map<ffi::String, Integer> > CalculateAlloca
     const IRModule& mod) {
   tvm::ffi::Map<ffi::String, tvm::ffi::Map<ffi::String, Integer> > results;
   for (const auto& kv : mod->functions) {
-    if (auto prim_func = kv.second.as<tir::PrimFunc>()) {
+    if (auto prim_func = kv.second.as<tirx::PrimFunc>()) {
       ffi::String func_name = kv.first->name_hint;
-      results.Set(func_name, AllocationCalculator<AllocateNode>()(prim_func.value()));
+      auto alloc_buffer_result = AllocBufferCalculator()(prim_func.value());
+      results.Set(func_name, alloc_buffer_result);
     }
   }
   return results;
@@ -146,7 +166,7 @@ int64_t GetVTCMCapacity(Target target, const tvm::transform::PassContext& pass_c
     auto value = target->GetAttr<Integer>("vtcm-capacity").value()->value;
     if (value > 0) return value;
   }
-  return pass_ctx->GetConfig<Integer>("tir.vtcm_capacity", Integer(0)).value()->value;
+  return pass_ctx->GetConfig<Integer>("tirx.vtcm_capacity", Integer(0)).value()->value;
 }
 
 ffi::Array<tvm::transform::Pass> GetVTCMCompactionPasses() {
@@ -158,10 +178,10 @@ ffi::Array<tvm::transform::Pass> GetVTCMCompactionPasses() {
   pass_list.push_back(s_tir::transform::LowerMatchBuffer());
   pass_list.push_back(s_tir::transform::InjectSoftwarePipeline());
   pass_list.push_back(s_tir::transform::LowerOpaqueBlock());
-  pass_list.push_back(tir::transform::FlattenBuffer());
-  pass_list.push_back(tir::transform::Simplify());
-  pass_list.push_back(tir::transform::VectorizeLoop(true));
-  pass_list.push_back(tir::transform::StorageRewrite());
+  pass_list.push_back(tirx::transform::FlattenBuffer());
+  pass_list.push_back(tirx::transform::Simplify());
+  pass_list.push_back(tirx::transform::VectorizeLoop(true));
+  pass_list.push_back(tirx::transform::StorageRewrite());
   return pass_list;
 }
 

@@ -23,10 +23,10 @@ import pytest
 
 import tvm
 import tvm.testing
-from tvm import tir
+from tvm import tirx
 from tvm.script import ir as I
 from tvm.script import relax as R
-from tvm.script import tir as T
+from tvm.script import tirx as T
 
 
 def opt_gemm_lower():
@@ -35,23 +35,17 @@ def opt_gemm_lower():
         @T.prim_func
         def mmult(A: T.handle, B: T.handle, C: T.handle) -> None:
             # function attr dict
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             A_1 = T.match_buffer(A, [16384], elem_offset=0, align=64, offset_factor=1)
             B_1 = T.match_buffer(B, [1024, 1024], elem_offset=0, align=64, offset_factor=1)
             C_1 = T.match_buffer(C, [16384], elem_offset=0, align=64, offset_factor=1)
             # body
-            packedB_data = T.allocate([32768], "float32", "global")
-            packedB = T.decl_buffer(
-                shape=[32768], dtype="float32", scope="global", data=packedB_data
-            )
+            packedB = T.alloc_buffer((32768,))
             for x in T.parallel(0, 32):
                 for y in T.serial(0, 1024):
                     packedB[T.ramp(((x * 32768) + (y * 32)), 1, 32)] = B_1[y, T.ramp(x * 32, 1, 32)]
             for x_outer in T.parallel(0, 32):
-                C_global_data = T.allocate([1024], "float32", "global")
-                C_global = T.decl_buffer(
-                    shape=[1024], dtype="float32", scope="global", data=C_global_data
-                )
+                C_global = T.alloc_buffer((1024,))
                 for y_outer in T.serial(0, 32):
                     for x_c_init in T.serial(0, 32):
                         C_global[T.ramp((x_c_init * 32), 1, 32)] = T.broadcast(T.float32(0), 32)
@@ -127,301 +121,6 @@ def launch_env_thread():
     return main
 
 
-def opt_gemm_mod_host():
-    @tvm.script.ir_module(check_well_formed=False)
-    class Module:
-        # packedB is treated as undefined
-        @T.prim_func
-        def mmult(
-            args: T.handle,
-            arg_type_ids: T.handle,
-            num_args: T.int32,
-            out_ret_value: T.handle,
-            out_ret_tcode: T.handle,
-        ) -> T.int32:
-            # function attr dict
-            T.func_attr(
-                {
-                    "tir.noalias": True,
-                    "tir.is_entry_func": True,
-                    "calling_conv": 1,
-                }
-            )
-            # buffer definition
-            buf_type_ids = T.match_buffer(arg_type_ids, [3], dtype="int32")
-            packedB = T.decl_buffer([32768], dtype="float32")
-            C_global = T.decl_buffer([1024], dtype="float32")
-            # body
-            assert num_args == 3, "mmult: num_args should be 3"
-            arg0: T.handle = T.tvm_struct_get(args, 0, 12, dtype="handle")
-            arg0_code: T.int32 = buf_type_ids[0]
-            arg1: T.handle = T.tvm_struct_get(args, 1, 12, dtype="handle")
-            arg1_code: T.int32 = buf_type_ids[1]
-            arg2: T.handle = T.tvm_struct_get(args, 2, 12, dtype="handle")
-            arg2_code: T.int32 = buf_type_ids[2]
-
-            A_data: T.handle("int32") = T.tvm_struct_get(arg0, 0, 1, dtype="handle")
-            T.attr(A_data, "storage_alignment", 128)
-            A = T.decl_buffer([1024 * 1024], dtype="int32", data=A_data)
-            buf0_shape_data: T.handle("int32") = T.tvm_struct_get(arg0, 0, 2, dtype="handle")
-            buf0_shape = T.decl_buffer([2], dtype="int32", data=buf0_shape_data)
-            buf0_strides_data: T.handle("int32") = T.tvm_struct_get(arg0, 0, 3, dtype="handle")
-            buf0_strides = T.decl_buffer([2], dtype="int32", data=buf0_strides_data)
-
-            dev_id: T.int32 = T.tvm_struct_get(arg0, 0, 9, dtype="int32")
-
-            B_data: T.handle("int32") = T.tvm_struct_get(arg1, 0, 1, dtype="handle")
-            T.attr(B_data, "storage_alignment", 128)
-            B = T.decl_buffer([1024 * 1024], dtype="int32", data=B_data)
-            buf1_shape_data: T.handle("int32") = T.tvm_struct_get(arg1, 0, 2, dtype="handle")
-            buf1_shape = T.decl_buffer([2], dtype="int32", data=buf1_shape_data)
-            buf1_strides_data: T.handle("int32") = T.tvm_struct_get(arg1, 0, 3, dtype="handle")
-            buf1_strides = T.decl_buffer([2], dtype="int32", data=buf1_strides_data)
-
-            C_data: T.handle("int32") = T.tvm_struct_get(arg2, 0, 1, dtype="handle")
-            T.attr(C_data, "storage_alignment", 128)
-            C = T.decl_buffer([1024 * 1024], dtype="int32", data=C_data)
-            buf2_shape_data: T.handle("int32") = T.tvm_struct_get(arg2, 0, 2, dtype="handle")
-            buf2_shape = T.decl_buffer([2], dtype="int32", data=buf2_shape_data)
-            buf2_strides_data: T.handle("int32") = T.tvm_struct_get(arg2, 0, 3, dtype="handle")
-            buf2_strides = T.decl_buffer([2], dtype="int32", data=buf2_strides_data)
-
-            assert (((arg0_code == 3) or (arg0_code == 13)) or (arg0_code == 7)) or (
-                arg0_code == 4
-            ), "mmult: Expect arg[0] to be pointer"
-            assert (((arg1_code == 3) or (arg1_code == 13)) or (arg1_code == 7)) or (
-                arg1_code == 4
-            ), "mmult: Expect arg[1] to be pointer"
-            assert (((arg2_code == 3) or (arg2_code == 13)) or (arg2_code == 7)) or (
-                arg2_code == 4
-            ), "mmult: Expect arg[2] to be pointer"
-            assert 2 == T.tvm_struct_get(arg0, 0, 4, dtype="int32"), (
-                "arg0.ndim is expected to equal 2"
-            )
-            assert 2 == T.tvm_struct_get(arg0, 0, 4, dtype="int32"), (
-                "arg0.ndim is expected to equal 2"
-            )
-            assert (
-                (T.tvm_struct_get(arg0, 0, 5, dtype="uint8") == T.uint8(2))
-                and (T.tvm_struct_get(arg0, 0, 6, dtype="uint8") == T.uint8(32))
-            ) and (T.tvm_struct_get(arg0, 0, 7, dtype="uint16") == T.uint16(1)), (
-                "arg0.dtype is expected to be float32"
-            )
-            assert 1024 == T.cast(buf0_shape[0], "int32"), (
-                "Argument arg0.shape[0] has an unsatisfied constraint"
-            )
-            assert 1024 == T.cast(buf0_shape[1], "int32"), (
-                "Argument arg0.shape[1] has an unsatisfied constraint"
-            )
-            if not (T.isnullptr(buf0_strides.data, dtype="bool")):
-                assert (1 == T.cast(buf0_strides[1], "int32")) and (
-                    1024 == T.cast(buf0_strides[0], "int32")
-                ), "arg0.strides: expected to be compact array"
-                T.evaluate(0)
-            assert T.uint64(0) == T.tvm_struct_get(arg0, 0, 8, dtype="uint64"), (
-                "Argument arg0.byte_offset has an unsatisfied constraint"
-            )
-            assert 1 == T.tvm_struct_get(arg0, 0, 10, dtype="int32"), (
-                "Argument arg0.device_type has an unsatisfied constraint"
-            )
-            assert 2 == T.tvm_struct_get(arg1, 0, 4, dtype="int32"), (
-                "arg1.ndim is expected to equal 2"
-            )
-            assert 2 == T.tvm_struct_get(arg1, 0, 4, dtype="int32"), (
-                "arg1.ndim is expected to equal 2"
-            )
-            assert (
-                (T.tvm_struct_get(arg1, 0, 5, dtype="uint8") == T.uint8(2))
-                and (T.tvm_struct_get(arg1, 0, 6, dtype="uint8") == T.uint8(32))
-            ) and (T.tvm_struct_get(arg1, 0, 7, dtype="uint16") == T.uint16(1)), (
-                "arg1.dtype is expected to be float32"
-            )
-            assert 1024 == T.cast(buf1_shape[0], "int32"), (
-                "Argument arg1.shape[0] has an unsatisfied constraint"
-            )
-            assert 1024 == T.cast(buf1_shape[1], "int32"), (
-                "Argument arg1.shape[1] has an unsatisfied constraint"
-            )
-            if not (T.isnullptr(buf1_strides.data, dtype="bool")):
-                assert (1 == T.cast(buf1_strides[1], "int32")) and (
-                    1024 == T.cast(buf1_strides[0], "int32")
-                ), "arg1.strides: expected to be compact array"
-                T.evaluate(0)
-            assert T.uint64(0) == T.tvm_struct_get(arg1, 0, 8, dtype="uint64"), (
-                "Argument arg1.byte_offset has an unsatisfied constraint"
-            )
-            assert 1 == T.tvm_struct_get(arg1, 0, 10, dtype="int32"), (
-                "Argument arg1.device_type has an unsatisfied constraint"
-            )
-            assert dev_id == T.tvm_struct_get(arg1, 0, 9, dtype="int32"), (
-                "Argument arg1.device_id has an unsatisfied constraint"
-            )
-            assert 2 == T.tvm_struct_get(arg2, 0, 4, dtype="int32"), (
-                "arg2.ndim is expected to equal 2"
-            )
-            assert 2 == T.tvm_struct_get(arg2, 0, 4, dtype="int32"), (
-                "arg2.ndim is expected to equal 2"
-            )
-            assert (
-                (T.tvm_struct_get(arg2, 0, 5, dtype="uint8") == T.uint8(2))
-                and (T.tvm_struct_get(arg2, 0, 6, dtype="uint8") == T.uint8(32))
-            ) and (T.tvm_struct_get(arg2, 0, 7, dtype="uint16") == T.uint16(1)), (
-                "arg2.dtype is expected to be float32"
-            )
-            assert 1024 == T.cast(buf2_shape[0], "int32"), (
-                "Argument arg2.shape[0] has an unsatisfied constraint"
-            )
-            assert 1024 == T.cast(buf2_shape[1], "int32"), (
-                "Argument arg2.shape[1] has an unsatisfied constraint"
-            )
-            if not (T.isnullptr(buf2_strides.data, dtype="bool")):
-                assert (1 == T.cast(buf2_strides[1], "int32")) and (
-                    1024 == T.cast(buf2_strides[0], "int32")
-                ), "arg2.strides: expected to be compact array"
-                T.evaluate(0)
-            assert T.uint64(0) == T.tvm_struct_get(arg2, 0, 8, dtype="uint64"), (
-                "Argument arg2.byte_offset has an unsatisfied constraint"
-            )
-            assert 1 == T.tvm_struct_get(arg2, 0, 10, dtype="int32"), (
-                "Argument arg2.device_type has an unsatisfied constraint"
-            )
-            assert dev_id == T.tvm_struct_get(arg2, 0, 9, dtype="int32"), (
-                "Argument arg2.device_id has an unsatisfied constraint"
-            )
-            T.attr(0, "compute_scope", "mmult_compute_")
-            T.attr(packedB.data, "storage_scope", "global")
-            T.attr(packedB.data, "storage_alignment", 128)
-            with T.LetStmt(
-                T.TVMBackendAllocWorkspace(1, dev_id, T.uint64(4194304), 2, 32, dtype="handle"),
-                var=packedB.data,
-            ):
-                if T.isnullptr(packedB.data, dtype="bool"):
-                    T.evaluate(T.tvm_throw_last_error(dtype="int32"))
-                for x in T.parallel(0, 32):
-                    for y in T.serial(0, 1024):
-                        packedB[T.ramp(((x * 32768) + (y * 32)), 1, 32)] = B[
-                            T.ramp(((y * 1024) + (x * 32)), 1, 32)
-                        ]
-                for x_outer in T.parallel(0, 32):
-                    T.attr(C_global.data, "storage_scope", "global")
-                    T.attr(C_global.data, "storage_alignment", 128)
-                    with T.LetStmt(
-                        T.TVMBackendAllocWorkspace(
-                            1, dev_id, T.uint64(4096), 2, 32, dtype="handle"
-                        ),
-                        var=C_global.data,
-                    ):
-                        if T.isnullptr(C_global.data, dtype="bool"):
-                            T.evaluate(T.tvm_throw_last_error(dtype="int32"))
-                        for y_outer in T.serial(0, 32):
-                            for x_c_init in T.serial(0, 32):
-                                C_global[T.ramp((x_c_init * 32), 1, 32)] = T.broadcast(
-                                    T.float32(0), 32
-                                )
-                            for k_outer in T.serial(0, 256):
-                                for x_c in T.serial(0, 32):
-                                    C_global[T.ramp((x_c * 32), 1, 32)] = T.call_llvm_pure_intrin(
-                                        T.uint32(97),
-                                        T.broadcast(
-                                            A[
-                                                (
-                                                    ((x_outer * 32768) + (x_c * 1024))
-                                                    + (k_outer * 4)
-                                                ),
-                                            ],
-                                            32,
-                                        ),
-                                        packedB[
-                                            T.ramp(((y_outer * 32768) + (k_outer * 128)), 1, 32)
-                                        ],
-                                        C_global[T.ramp((x_c * 32), 1, 32)],
-                                        dtype="float32x32",
-                                    )
-                                    C_global[T.ramp((x_c * 32), 1, 32)] = T.call_llvm_pure_intrin(
-                                        T.uint32(97),
-                                        T.broadcast(
-                                            A[
-                                                (
-                                                    (
-                                                        ((x_outer * 32768) + (x_c * 1024))
-                                                        + (k_outer * 4)
-                                                    )
-                                                    + 1
-                                                ),
-                                            ],
-                                            32,
-                                        ),
-                                        packedB[
-                                            T.ramp(
-                                                (((y_outer * 32768) + (k_outer * 128)) + 32), 1, 32
-                                            )
-                                        ],
-                                        C_global[T.ramp((x_c * 32), 1, 32)],
-                                        dtype="float32x32",
-                                    )
-                                    C_global[T.ramp((x_c * 32), 1, 32)] = T.call_llvm_pure_intrin(
-                                        T.uint32(97),
-                                        T.broadcast(
-                                            A[
-                                                (
-                                                    (
-                                                        ((x_outer * 32768) + (x_c * 1024))
-                                                        + (k_outer * 4)
-                                                    )
-                                                    + 2
-                                                ),
-                                            ],
-                                            32,
-                                        ),
-                                        packedB[
-                                            T.ramp(
-                                                (((y_outer * 32768) + (k_outer * 128)) + 64), 1, 32
-                                            )
-                                        ],
-                                        C_global[T.ramp((x_c * 32), 1, 32)],
-                                        dtype="float32x32",
-                                    )
-                                    C_global[T.ramp((x_c * 32), 1, 32)] = T.call_llvm_pure_intrin(
-                                        T.uint32(97),
-                                        T.broadcast(
-                                            A[
-                                                (
-                                                    (
-                                                        ((x_outer * 32768) + (x_c * 1024))
-                                                        + (k_outer * 4)
-                                                    )
-                                                    + 3
-                                                ),
-                                            ],
-                                            32,
-                                        ),
-                                        packedB[
-                                            T.ramp(
-                                                (((y_outer * 32768) + (k_outer * 128)) + 96), 1, 32
-                                            )
-                                        ],
-                                        C_global[T.ramp((x_c * 32), 1, 32)],
-                                        dtype="float32x32",
-                                    )
-                            for x_inner in T.serial(0, 32):
-                                for y_inner in T.serial(0, 32):
-                                    C[
-                                        (
-                                            (
-                                                ((x_outer * 32768) + (x_inner * 1024))
-                                                + (y_outer * 32)
-                                            )
-                                            + y_inner
-                                        )
-                                    ] = C_global[((x_inner * 32) + y_inner)]
-                    if T.TVMBackendFreeWorkspace(1, dev_id, C_global.data, dtype="int32") != 0:
-                        T.evaluate(T.tvm_throw_last_error(dtype="int32"))
-            if T.TVMBackendFreeWorkspace(1, dev_id, packedB.data, dtype="int32") != 0:
-                T.evaluate(T.tvm_throw_last_error(dtype="int32"))
-
-    return Module
-
-
 def opt_conv_tensorcore_lower():
     @T.prim_func
     def func(
@@ -430,7 +129,7 @@ def opt_conv_tensorcore_lower():
         Conv: T.Buffer((16, 14, 14, 32, 16, 16), "float32"),
     ) -> None:
         # function attr dict
-        T.func_attr({"global_symbol": "default_function", "tir.noalias": True})
+        T.func_attr({"global_symbol": "default_function", "tirx.noalias": True})
         # body
         A_1 = T.decl_buffer([12845056], dtype="float16", data=A.data)
         W_1 = T.decl_buffer([1179648], dtype="float16", data=W.data)
@@ -442,24 +141,11 @@ def opt_conv_tensorcore_lower():
         ty = T.env_thread("threadIdx.y")
         tz = T.env_thread("threadIdx.z")
         T.launch_thread(bz, 196)
-        Conv_wmma_accumulator_data = T.allocate([2048], "float32", "wmma.accumulator")
-        Conv_wmma_accumulator = T.decl_buffer(
-            shape=[2048], dtype="float32", scope="wmma.accumulator", data=Conv_wmma_accumulator_data
-        )
-        Apad_shared_data = T.allocate([12288], "float16", "shared")
-        Apad_shared = T.decl_buffer(
-            shape=[12288], dtype="float16", scope="shared", data=Apad_shared_data
-        )
-        W_shared_data = T.allocate([12288], "float16", "shared")
-        W_shared = T.decl_buffer(shape=[12288], dtype="float16", scope="shared", data=W_shared_data)
-        Apad_shared_wmma_matrix_a_data = T.allocate([512], "float16", "wmma.matrix_a")
-        Apad_shared_wmma_matrix_a = T.decl_buffer(
-            shape=[512], dtype="float16", scope="wmma.matrix_a", data=Apad_shared_wmma_matrix_a_data
-        )
-        W_shared_wmma_matrix_b_data = T.allocate([1024], "float16", "wmma.matrix_b")
-        W_shared_wmma_matrix_b = T.decl_buffer(
-            shape=[1024], dtype="float16", scope="wmma.matrix_b", data=W_shared_wmma_matrix_b_data
-        )
+        Conv_wmma_accumulator = T.alloc_buffer((2048,), scope="wmma.accumulator")
+        Apad_shared = T.alloc_buffer((12288,), "float16", scope="shared")
+        W_shared = T.alloc_buffer((12288,), "float16", scope="shared")
+        Apad_shared_wmma_matrix_a = T.alloc_buffer((512,), "float16", scope="wmma.matrix_a")
+        W_shared_wmma_matrix_b = T.alloc_buffer((1024,), "float16", scope="wmma.matrix_b")
         T.launch_thread(bx, 2)
         T.launch_thread(by, 4)
         T.launch_thread(ty, 4)
@@ -1728,9 +1414,9 @@ def opt_conv_tensorcore_mod_host():
         # function attr dict
         T.func_attr(
             {
-                "tir.noalias": True,
+                "tirx.noalias": True,
                 "global_symbol": "default_function",
-                "tir.is_entry_func": True,
+                "tirx.is_entry_func": True,
                 "calling_conv": 1,
             }
         )
@@ -1981,8 +1667,7 @@ def vthread_func():
         T.launch_thread(i0, 4)
         T.launch_thread(i1, 2)
         T.launch_thread(i2, 2)
-        B_data = T.allocate([16], "float32", "local")
-        B = T.decl_buffer(shape=[16], dtype="float32", scope="local", data=B_data)
+        B = T.alloc_buffer((16,), scope="local")
         for j in range(16):
             B[j] = A[i0 * 64 + i1 * 32 + i2 * 16 + j] + T.float32(1)
         for j in range(16):
@@ -2033,7 +1718,7 @@ def element_wise():
     def element_wise(a: T.handle, c: T.handle) -> None:
         A = T.match_buffer(a, (128, 128), "float32")
         C = T.match_buffer(c, (128, 128), "float32")
-        B = T.alloc_buffer((128, 128), "float32")
+        B = T.sblock_alloc_buffer((128, 128), "float32")
 
         for i, j in T.grid(128, 128):
             with T.sblock("B"):
@@ -2077,13 +1762,13 @@ def test_matmul_original():
     rt_func = tvm.script.from_source(func.script())
     tvm.ir.assert_structural_equal(func, rt_func)
 
-    assert isinstance(rt_func.body.block, tir.stmt.SBlock)
-    assert isinstance(rt_func.body.block.body, tir.stmt.For)
-    assert isinstance(rt_func.body.block.body.body, tir.stmt.For)
-    assert isinstance(rt_func.body.block.body.body.body, tir.stmt.SeqStmt)
-    assert isinstance(rt_func.body.block.body.body.body[0].block, tir.stmt.SBlock)
-    assert isinstance(rt_func.body.block.body.body.body[1], tir.stmt.For)
-    assert isinstance(rt_func.body.block.body.body.body[1].body.block, tir.stmt.SBlock)
+    assert isinstance(rt_func.body.block, tirx.stmt.SBlock)
+    assert isinstance(rt_func.body.block.body, tirx.stmt.For)
+    assert isinstance(rt_func.body.block.body.body, tirx.stmt.For)
+    assert isinstance(rt_func.body.block.body.body.body, tirx.stmt.SeqStmt)
+    assert isinstance(rt_func.body.block.body.body.body[0].block, tirx.stmt.SBlock)
+    assert isinstance(rt_func.body.block.body.body.body[1], tirx.stmt.For)
+    assert isinstance(rt_func.body.block.body.body.body[1].body.block, tirx.stmt.SBlock)
 
 
 def test_element_wise():
@@ -2091,15 +1776,15 @@ def test_element_wise():
     rt_func = tvm.script.from_source(func.script())
     tvm.ir.assert_structural_equal(func, rt_func)
 
-    assert isinstance(rt_func.body.block, tir.stmt.SBlock)
-    assert isinstance(rt_func.body.block.body, tir.stmt.SeqStmt)
-    assert isinstance(rt_func.body.block.body[0], tir.stmt.For)
-    assert isinstance(rt_func.body.block.body[0].body, tir.stmt.For)
-    assert isinstance(rt_func.body.block.body[0].body.body.block, tir.stmt.SBlock)
+    assert isinstance(rt_func.body.block, tirx.stmt.SBlock)
+    assert isinstance(rt_func.body.block.body, tirx.stmt.SeqStmt)
+    assert isinstance(rt_func.body.block.body[0], tirx.stmt.For)
+    assert isinstance(rt_func.body.block.body[0].body, tirx.stmt.For)
+    assert isinstance(rt_func.body.block.body[0].body.body.block, tirx.stmt.SBlock)
 
-    assert isinstance(rt_func.body.block.body[1], tir.stmt.For)
-    assert isinstance(rt_func.body.block.body[1].body, tir.stmt.For)
-    assert isinstance(rt_func.body.block.body[1].body.body.block, tir.stmt.SBlock)
+    assert isinstance(rt_func.body.block.body[1], tirx.stmt.For)
+    assert isinstance(rt_func.body.block.body[1].body, tirx.stmt.For)
+    assert isinstance(rt_func.body.block.body[1].body.body.block, tirx.stmt.SBlock)
 
 
 def test_predicate():
@@ -2107,11 +1792,11 @@ def test_predicate():
     rt_func = tvm.script.from_source(func.script())
     tvm.ir.assert_structural_equal(func, rt_func)
 
-    assert isinstance(rt_func.body.block, tir.stmt.SBlock)
-    assert isinstance(rt_func.body.block.body, tir.stmt.For)
-    assert isinstance(rt_func.body.block.body.body, tir.stmt.For)
-    assert isinstance(rt_func.body.block.body.body.body, tir.stmt.For)
-    assert isinstance(rt_func.body.block.body.body.body.body.block, tir.stmt.SBlock)
+    assert isinstance(rt_func.body.block, tirx.stmt.SBlock)
+    assert isinstance(rt_func.body.block.body, tirx.stmt.For)
+    assert isinstance(rt_func.body.block.body.body, tirx.stmt.For)
+    assert isinstance(rt_func.body.block.body.body.body, tirx.stmt.For)
+    assert isinstance(rt_func.body.block.body.body.body.body.block, tirx.stmt.SBlock)
 
 
 def for_thread_binding():
@@ -2134,10 +1819,10 @@ def test_for_thread_binding():
     rt_func = tvm.script.from_source(func.script())
     tvm.ir.assert_structural_equal(func, rt_func)
 
-    assert isinstance(rt_func.body, tir.stmt.For)
+    assert isinstance(rt_func.body, tirx.stmt.For)
     assert rt_func.body.kind == 4
     assert rt_func.body.thread_binding.thread_tag == "threadIdx.x"
-    assert isinstance(rt_func.body.body, tir.stmt.For)
+    assert isinstance(rt_func.body.body, tirx.stmt.For)
     assert rt_func.body.body.kind == 4
     assert rt_func.body.body.thread_binding.thread_tag == "threadIdx.y"
     assert rt_func.body.body.annotations["attr_key"] == "attr_value"
@@ -2168,19 +1853,19 @@ def test_match_buffer_region():
     rt_func = tvm.script.from_source(func.script())
     tvm.ir.assert_structural_equal(func, rt_func)
 
-    assert isinstance(rt_func.body, tir.stmt.SBlockRealize)
+    assert isinstance(rt_func.body, tirx.stmt.SBlockRealize)
     root = rt_func.body.block
 
-    assert isinstance(root.body, tir.stmt.For)
-    assert isinstance(root.body.body, tir.stmt.For)
-    assert isinstance(root.body.body.body, tir.stmt.SBlockRealize)
+    assert isinstance(root.body, tirx.stmt.For)
+    assert isinstance(root.body.body, tirx.stmt.For)
+    assert isinstance(root.body.body.body, tirx.stmt.SBlockRealize)
     outer_block = root.body.body.body.block
     assert len(outer_block.match_buffers) == 1
     buffer_C = outer_block.match_buffers[0].buffer
     tvm.ir.assert_structural_equal(buffer_C.shape, [T.int32(16), T.int32(1), T.int32(4)])
 
-    assert isinstance(outer_block.body, tir.stmt.For)
-    assert isinstance(outer_block.body.body, tir.stmt.SBlockRealize)
+    assert isinstance(outer_block.body, tirx.stmt.For)
+    assert isinstance(outer_block.body.body, tirx.stmt.SBlockRealize)
     inner_block = outer_block.body.body.block
     assert len(inner_block.match_buffers) == 1
     buffer_D = inner_block.match_buffers[0].buffer
@@ -2199,7 +1884,7 @@ def block_elements():
             T.reads(A[0:16, 0:16])
             T.writes(B[0, 0])
             T.sblock_attr({"attr_key": "attr_value"})
-            C = T.alloc_buffer((4, 4), dtype="float32")
+            C = T.sblock_alloc_buffer((4, 4), dtype="float32")
             D = T.match_buffer(A[0:4, 0], (4, 1))
             with T.init():
                 B[0, 0] = T.float32(0)
@@ -2213,12 +1898,12 @@ def test_block_elements():
     rt_func = tvm.script.from_source(func.script())
     tvm.ir.assert_structural_equal(func, rt_func)
 
-    assert isinstance(rt_func.body.block, tir.stmt.SBlock)
-    assert isinstance(rt_func.body.block.body, tir.stmt.SBlockRealize)
-    assert isinstance(rt_func.body.block.body.block, tir.stmt.SBlock)
+    assert isinstance(rt_func.body.block, tirx.stmt.SBlock)
+    assert isinstance(rt_func.body.block.body, tirx.stmt.SBlockRealize)
+    assert isinstance(rt_func.body.block.body.block, tirx.stmt.SBlock)
     block = rt_func.body.block.body.block
-    assert isinstance(block.body, tir.stmt.BufferStore)
-    assert isinstance(block.init, tir.stmt.BufferStore)
+    assert isinstance(block.body, tirx.stmt.BufferStore)
+    assert isinstance(block.init, tirx.stmt.BufferStore)
     assert len(block.annotations) == 1
     assert block.annotations["attr_key"] == "attr_value"
 
@@ -2250,14 +1935,14 @@ def test_opaque_block():
     tvm.ir.assert_structural_equal(func, rt_func)
 
     root_block = rt_func.body.block
-    assert isinstance(root_block, tir.stmt.SBlock)
-    assert isinstance(root_block.body, tir.stmt.For)
-    assert isinstance(root_block.body.body[0], tir.stmt.For)
-    assert isinstance(root_block.body.body[0].body, tir.stmt.SBlockRealize)
-    assert isinstance(root_block.body.body[0].body.block, tir.stmt.SBlock)
+    assert isinstance(root_block, tirx.stmt.SBlock)
+    assert isinstance(root_block.body, tirx.stmt.For)
+    assert isinstance(root_block.body.body[0], tirx.stmt.For)
+    assert isinstance(root_block.body.body[0].body, tirx.stmt.SBlockRealize)
+    assert isinstance(root_block.body.body[0].body.block, tirx.stmt.SBlock)
     assert len(root_block.body.body[0].body.block.iter_vars) == 0
-    assert isinstance(root_block.body.body[1], tir.stmt.SBlockRealize)
-    assert isinstance(root_block.body.body[1].block, tir.stmt.SBlock)
+    assert isinstance(root_block.body.body[1], tirx.stmt.SBlockRealize)
+    assert isinstance(root_block.body.body[1].block, tirx.stmt.SBlock)
     assert len(root_block.body.body[1].block.iter_vars) == 0
 
 
@@ -2265,7 +1950,7 @@ def rank0():
     @T.prim_func
     def rank0(a: T.handle) -> None:
         A = T.match_buffer(a, (), "float32")
-        B = T.alloc_buffer((), "float32")
+        B = T.sblock_alloc_buffer((), "float32")
         A[()] = 2
         B[()] = A[()]
 
@@ -2276,7 +1961,7 @@ def rank0_block():
     @T.prim_func
     def rank0_block(a: T.handle) -> None:
         A = T.match_buffer(a, (), "float32")
-        B = T.alloc_buffer((), "float32")
+        B = T.sblock_alloc_buffer((), "float32")
         B[()] = A[()]
 
         with T.sblock("update"):
@@ -2375,7 +2060,7 @@ def while_loop():
     def while_loop(a: T.handle, b: T.handle) -> None:
         A = T.match_buffer(a, (16,), "float32")
         B = T.match_buffer(b, (16,), "float32")
-        i = T.alloc_buffer((), "int32", scope="local")
+        i = T.sblock_alloc_buffer((), "int32", scope="local")
         for ii in range(16):
             with T.sblock():
                 vi = T.axis.S(16, ii)
@@ -2392,12 +2077,11 @@ def primfunc_with_allocate_annotations():
     @T.prim_func
     def primfunc_with_allocate_annotations(placeholder_28: T.handle, T_cast_6: T.handle) -> None:
         # function attr dict
-        T.func_attr({"global_symbol": "tvmgen_default_fused_nn_max_pool2d_cast", "tir.noalias": True})
+        T.func_attr({"global_symbol": "tvmgen_default_fused_nn_max_pool2d_cast", "tirx.noalias": True})
         placeholder_29 = T.match_buffer(placeholder_28, [802816], dtype="uint8", elem_offset=0, align=64, offset_factor=1)
         T_cast_7 = T.match_buffer(T_cast_6, [200704], dtype="int16", elem_offset=0, align=64, offset_factor=1)
         # body
-        tensor_2_data = T.allocate([200704], "uint8", "global", annotations={"attr1_key": "attr1_value"})
-        tensor_2 = T.decl_buffer(shape=[200704], dtype="uint8", scope="global", data=tensor_2_data)
+        tensor_2 = T.alloc_buffer((200704,), "uint8", annotations={"attr1_key": "attr1_value"})
         for ax0_ax1_fused_4 in T.serial(0, 56):
             for ax2_4 in T.serial(0, 56):
                 for ax3_init in T.serial(0, 64):
@@ -2416,13 +2100,12 @@ def primfunc_with_allocate_annotations():
 def comm_reducer_single_reduce_group():
     @T.prim_func
     def comm_reducer_single_reduce_group(a: T.handle, b: T.handle) -> None:
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
+        T.func_attr({"global_symbol": "main", "tirx.noalias": True})
         threadIdx_x = T.env_thread("threadIdx.x")
         A = T.match_buffer(a, [16384], dtype="float32")
         for i in T.serial(0, 128):
             T.launch_thread(threadIdx_x, 128)
-            reduce_temp0_data = T.allocate([1], "float32", "local")
-            reduce_temp0 = T.decl_buffer(shape=[1], dtype="float32", scope="local", data=reduce_temp0_data)
+            reduce_temp0 = T.alloc_buffer((1,), scope="local")
             with T.attr(T.comm_reducer(lambda x, y: x + y, [T.float32(0)]), "reduce_scope", T.reinterpret(T.uint64(0), dtype="handle")):
                 T.evaluate(T.tvm_thread_allreduce(T.uint32(1), A[i * 128 + threadIdx_x], True, reduce_temp0.data, threadIdx_x, dtype="handle"))
 
@@ -2432,13 +2115,12 @@ def comm_reducer_single_reduce_group():
 def comm_reducer_multiple_reduce_groups():
     @T.prim_func
     def comm_reducer_multiple_reduce_groups(a: T.handle, b: T.handle) -> None:
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
+        T.func_attr({"global_symbol": "main", "tirx.noalias": True})
         threadIdx_x = T.env_thread("threadIdx.x")
         A = T.match_buffer(a, [16384], dtype="float32")
         for i in T.serial(0, 128):
             T.launch_thread(threadIdx_x, 128)
-            reduce_temp0_data = T.allocate([1], "float32", "local")
-            reduce_temp0 = T.decl_buffer(shape=[1], dtype="float32", scope="local", data=reduce_temp0_data)
+            reduce_temp0 = T.alloc_buffer((1,), scope="local")
             with T.attr(T.comm_reducer(lambda x0, x1, y0, y1: (T.Select((x1 >= y1), x0, y0), T.Select((x1 >= y1), x1, y1)), [T.int32(-1), T.min_value("float32")]), "reduce_scope", T.reinterpret(T.uint64(0), dtype="handle")):
                 T.evaluate(T.tvm_thread_allreduce(T.uint32(1), A[i * 128 + threadIdx_x], True, reduce_temp0.data, threadIdx_x, dtype="handle"))
 
@@ -2484,9 +2166,9 @@ def test_div_mod():
     rt_func = tvm.script.from_source(func.script(), check_well_formed=False)
     tvm.ir.assert_structural_equal(func, rt_func, True)
 
-    assert isinstance(func.body[0].value, tvm.tir.FloorDiv)
-    assert isinstance(func.body[1].value, tvm.tir.FloorMod)
-    assert isinstance(func.body[2].value, tvm.tir.Mod)
+    assert isinstance(func.body[0].value, tvm.tirx.FloorDiv)
+    assert isinstance(func.body[1].value, tvm.tirx.FloorMod)
+    assert isinstance(func.body[2].value, tvm.tirx.Mod)
 
 
 def loop_extent_dependent():
@@ -2615,8 +2297,7 @@ def func_T_ptr_let_statement():
 def func_T_ptr_allocate():
     @T.prim_func
     def func_T_ptr_allocate() -> None:
-        A_data = T.allocate([1024], "float32", "global")
-        A = T.decl_buffer(shape=[1024], dtype="float32", scope="global", data=A_data)
+        A = T.alloc_buffer((1024,))
         A[0] = 0.0
 
     return func_T_ptr_allocate
@@ -2672,7 +2353,7 @@ def int64_support():
     @T.prim_func
     def elementwise_shape_int64(a: T.handle, c: T.handle) -> None:
         A = T.match_buffer(a, (T.int64(128), T.int64(128)), dtype="float32")
-        B = T.alloc_buffer((T.int64(128), T.int64(128)), dtype="float32")
+        B = T.sblock_alloc_buffer((T.int64(128), T.int64(128)), dtype="float32")
         C = T.match_buffer(c, (T.int64(128), T.int64(128)), dtype="float32")
         for i, j in T.grid(128, 128):
             with T.sblock("B"):
@@ -2707,10 +2388,8 @@ def string_annotation_escaping():
 def pointer_type():
     @T.prim_func
     def func_with_ptr_type_annotations(x: T.handle("int32"), y: T.handle("int32", "shared")):
-        xx_data = T.allocate([16], "int32", "global")
-        xx = T.decl_buffer(shape=[16], dtype="int32", scope="global", data=xx_data)
-        yy_data = T.allocate([16], "int32", "shared")
-        yy = T.decl_buffer(shape=[16], dtype="int32", scope="shared", data=yy_data)
+        xx = T.alloc_buffer((16,), "int32")
+        yy = T.alloc_buffer((16,), "int32", scope="shared")
         a: T.handle("int32") = T.address_of(xx[0], dtype="handle")
         b: T.handle("int32", "shared") = T.address_of(yy[0], dtype="handle")
         T.evaluate(T.call_extern("copy", a, b, dtype=""))
@@ -2723,7 +2402,7 @@ def buffer_axis_separator():
     def element_wise(a: T.handle, c: T.handle) -> None:
         A = T.match_buffer(a, (128, 128), "float32", axis_separators=[1])
         C = T.match_buffer(c, (128, 128), "float32")
-        B = T.alloc_buffer((128, 128), "float32", axis_separators=[1])
+        B = T.sblock_alloc_buffer((128, 128), "float32", axis_separators=[1])
 
         for i, j in T.grid(128, 128):
             with T.sblock("B"):
@@ -2765,7 +2444,7 @@ def scalable_vectors():
     @T.prim_func
     def func(a: T.handle):
         A = T.match_buffer(a, (200,), "float32")
-        A[T.Ramp(11, 2, 4 * tir.vscale())] = T.Broadcast(125, 4 * tir.vscale())
+        A[T.Ramp(11, 2, 4 * tirx.vscale())] = T.Broadcast(125, 4 * tirx.vscale())
 
     return func
 
@@ -2836,17 +2515,29 @@ def decl_buffer():
 def allocate_and_decl_buffer():
     @T.prim_func
     def func(A: T.Buffer((16,), "float32"), B: T.Buffer((16,), "float32")) -> None:
-        D_data = T.allocate((16,), "float32", "global")
-        D = T.decl_buffer((16,), "float32", data=D_data)
+        D = T.alloc_buffer((16,))
         for i in range(4):
-            with T.allocate((4,), "float32", "global") as C_data:
-                C = T.decl_buffer((4,), "float32", data=C_data)
-                for j in range(4):
-                    C[j] = A[i * 4 + j] + T.float32(1.0)
-                for j in range(4):
-                    D[j] = C[j]
+            C = T.alloc_buffer((4,))
+            for j in range(4):
+                C[j] = A[i * 4 + j] + T.float32(1.0)
+            for j in range(4):
+                D[j] = C[j]
             for j in range(4):
                 B[i * 4 + j] = D[j]
+
+    return func
+
+
+def alloc_buffer_example():
+    @T.prim_func
+    def func(a: T.handle, c: T.handle):
+        A = T.match_buffer(a, (128,), "float32")
+        C = T.match_buffer(c, (128,), "float32")
+        B = T.alloc_buffer((128,), "float32")
+        for i in range(128):
+            B[i] = A[i] * T.float32(2)
+        for i in range(128):
+            C[i] = B[i] + T.float32(1)
 
     return func
 
@@ -2857,7 +2548,7 @@ def float_infinity():
         placeholder: T.Buffer((1, 512, 768), "float32"), T_isinf: T.Buffer((1, 512, 768), "bool")
     ) -> None:
         # function attr dict
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
+        T.func_attr({"global_symbol": "main", "tirx.noalias": True})
         # body
         # with T.sblock("root")
         for i0, i1, i2 in T.grid(1, 512, 768):
@@ -2983,16 +2674,20 @@ def elif_chain_with_else():
 
 def nested_boolean_expressions():
     expressions = {
-        "and_lhs_and": lambda i, j, k: tir.all(tir.all(i, j), k),
-        "and_rhs_and": lambda i, j, k: tir.all(i, tir.all(j, k)),
-        "and_lhs_or": lambda i, j, k: tir.all(tir.any(i, j), k),
-        "and_rhs_or": lambda i, j, k: tir.all(i, tir.any(j, k)),
-        "or_lhs_and": lambda i, j, k: tir.any(tir.all(i, j), k),
-        "or_rhs_and": lambda i, j, k: tir.any(i, tir.all(j, k)),
-        "or_lhs_or": lambda i, j, k: tir.any(tir.any(i, j), k),
-        "or_rhs_or": lambda i, j, k: tir.any(i, tir.any(j, k)),
-        "and_of_ors": lambda i, j, k: tir.all(tir.any(i, j), tir.any(j, k), tir.any(i, k), i, j, k),
-        "or_of_ands": lambda i, j, k: tir.any(tir.all(i, j), tir.all(j, k), tir.all(i, k), i, j, k),
+        "and_lhs_and": lambda i, j, k: tirx.all(tirx.all(i, j), k),
+        "and_rhs_and": lambda i, j, k: tirx.all(i, tirx.all(j, k)),
+        "and_lhs_or": lambda i, j, k: tirx.all(tirx.any(i, j), k),
+        "and_rhs_or": lambda i, j, k: tirx.all(i, tirx.any(j, k)),
+        "or_lhs_and": lambda i, j, k: tirx.any(tirx.all(i, j), k),
+        "or_rhs_and": lambda i, j, k: tirx.any(i, tirx.all(j, k)),
+        "or_lhs_or": lambda i, j, k: tirx.any(tirx.any(i, j), k),
+        "or_rhs_or": lambda i, j, k: tirx.any(i, tirx.any(j, k)),
+        "and_of_ors": lambda i, j, k: tirx.all(
+            tirx.any(i, j), tirx.any(j, k), tirx.any(i, k), i, j, k
+        ),
+        "or_of_ands": lambda i, j, k: tirx.any(
+            tirx.all(i, j), tirx.all(j, k), tirx.all(i, k), i, j, k
+        ),
     }
 
     def make_ir_generator(name, expression):
@@ -3015,7 +2710,7 @@ def nested_boolean_expressions():
 def multi_env_threads():
     @T.prim_func
     def func(A: T.Buffer(128, "float32"), C: T.Buffer(128, "float32")):
-        B = T.alloc_buffer([128], dtype="float32")
+        B = T.sblock_alloc_buffer([128], dtype="float32")
         for i in T.thread_binding(128, thread="threadIdx.x"):
             B[i] = A[i] + 1.0
         for i in T.thread_binding(128, thread="threadIdx.x"):
@@ -3035,25 +2730,12 @@ def intrinsic_pow():
     return func
 
 
-def let_stmt_var():
+def bind_var():
     @T.prim_func
     def func():
-        with T.LetStmt(0) as x:
-            with T.LetStmt(0) as y:
-                T.evaluate(0)
+        x = T.bind(0)
+        y = T.bind(0)
         T.evaluate(0)
-
-    return func
-
-
-def let_stmt_value():
-    # uninitialized var
-    @T.prim_func(check_well_formed=False)
-    def func():
-        y = T.int32()
-        with T.LetStmt(y) as x:
-            with T.LetStmt(0, var=y):
-                T.evaluate(0)
         T.evaluate(0)
 
     return func
@@ -3062,7 +2744,7 @@ def let_stmt_value():
 def string_stride():
     @T.prim_func
     def main(a: T.handle, b: T.handle):
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
+        T.func_attr({"global_symbol": "main", "tirx.noalias": True})
         n = T.int32()
         A = T.match_buffer(a, (n,), strides=("A_s0",), buffer_type="auto")
         B = T.match_buffer(b, (n,), strides=("B_s0",), buffer_type="auto")
@@ -3081,7 +2763,7 @@ def string_stride():
 def string_stride_int64():
     @T.prim_func
     def main(a: T.handle, b: T.handle):
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
+        T.func_attr({"global_symbol": "main", "tirx.noalias": True})
         n = T.int64()
         A_s0 = T.int64()
         B_s0 = T.int64()
@@ -3098,7 +2780,7 @@ def merge_shape_var_def():
     @T.prim_func(check_well_formed=False)
     def main(A: T.handle, B: T.handle):
         # fmt: off
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
+        T.func_attr({"global_symbol": "main", "tirx.noalias": True})
         m, n = T.int32(), T.int32()
         A_1 = T.match_buffer(A, (m, n), strides=("A_1_s0", "A_1_s1"), buffer_type="auto")
         B_1 = T.match_buffer(B, (m, n), strides=("B_1_s0", "B_1_s1"), buffer_type="auto")
@@ -3150,29 +2832,29 @@ def tvm_shfl_builtins():
     ):
         blockIdx_x = T.launch_thread("blockIdx.x", 1)
         threadIdx_x = T.launch_thread("threadIdx.x", 32)
-        A_warp = T.allocate([1], "float32", "local")
-        B_warp = T.allocate([1], "float32", "local")
-        red_buf0 = T.allocate([1], "float32", "local")
-        A_warp_1 = T.decl_buffer((32,), data=A_warp, scope="local")
-        A_1 = T.decl_buffer((32,), data=A)
+        A_warp = T.alloc_buffer((1,), scope="local")
+        B_warp = T.alloc_buffer((1,), scope="local")
+        red_buf0 = T.alloc_buffer((1,), scope="local")
+        A_warp_1 = T.decl_buffer((32,), data=A_warp.data, scope="local")
+        A_1 = T.decl_buffer((32,), data=A)  # A is a handle param
         A_warp_1[0] = A_1[threadIdx_x]
-        B_warp_1 = T.decl_buffer((32,), data=B_warp, scope="local")
+        B_warp_1 = T.decl_buffer((32,), data=B_warp.data, scope="local")
         T.tvm_storage_sync("warp")
         B_warp_1[0] = T.tvm_warp_shuffle(
             T.tvm_warp_activemask(), A_warp_1[0], threadIdx_x % 4 * 8 + threadIdx_x // 4, 32, 32
         ) + T.float32(1)
-        red_buf0_1 = T.decl_buffer((1,), data=red_buf0, scope="local")
+        red_buf0_1 = T.decl_buffer((1,), data=red_buf0.data, scope="local")
         with T.attr(
             T.comm_reducer(lambda x0, y0: x0 + y0, [T.float32(0)]),
             "reduce_scope",
             T.reinterpret("handle", T.uint64(0)),
         ):
-            mask = T.allocate([1], "uint32", "local")
-            t0 = T.allocate([1], "float32", "local")
+            mask = T.alloc_buffer((1,), "uint32", scope="local")
+            t0 = T.alloc_buffer((1,), scope="local")
             red_buf0_1[0] = A_warp_1[0]
-            mask_1 = T.decl_buffer((1,), "uint32", data=mask, scope="local")
+            mask_1 = T.decl_buffer((1,), "uint32", data=mask.data, scope="local")
             mask_1[0] = T.tvm_warp_activemask()
-            t0_1 = T.decl_buffer((1,), data=t0, scope="local")
+            t0_1 = T.decl_buffer((1,), data=t0.data, scope="local")
             t0_1[0] = T.tvm_warp_shuffle_down(mask_1[0], red_buf0_1[0], 16, 32, 32)
             red_buf0_1[0] = red_buf0_1[0] + t0_1[0]
             t0_1[0] = T.tvm_warp_shuffle_down(mask_1[0], red_buf0_1[0], 8, 32, 32)
@@ -3203,7 +2885,7 @@ def make_packed_api_result():
         T.evaluate(A[bx])
 
     mod = tvm.IRModule.from_expr(func)
-    return tvm.tir.transform.MakePackedAPI()(mod)
+    return tvm.tirx.transform.MakePackedAPI()(mod)
 
 
 def tvm_struct_set_generated_in_cpp():
@@ -3236,7 +2918,7 @@ def tvm_struct_set_generated_in_cpp():
                 )
             )
 
-    return tvm.tir.transform.LowerTVMBuiltin()(Module)
+    return tvm.tirx.transform.LowerTVMBuiltin()(Module)
 
 
 def ir_module_with_attrs():
@@ -3260,15 +2942,15 @@ def nested_seqstmt():
     cause failures to round-trip through TVMScript, including
     erroneous use of TVMScript's concise-scoping rules.  This was
     resolved by normalizing nested SeqStmt in TIR, such that the use
-    of `tir.SeqStmt` below results in a single flat `tir.SeqStmt`
-    containing the three `tir.Evaluate` calls.
+    of `tirx.SeqStmt` below results in a single flat `tirx.SeqStmt`
+    containing the three `tirx.Evaluate` calls.
     """
-    func = tvm.tir.PrimFunc(
+    func = tvm.tirx.PrimFunc(
         params=[],
-        body=tvm.tir.SeqStmt(
+        body=tvm.tirx.SeqStmt(
             [
-                tvm.tir.SeqStmt([tvm.tir.Evaluate(0), tvm.tir.Evaluate(1)]),
-                tvm.tir.Evaluate(2),
+                tvm.tirx.SeqStmt([tvm.tirx.Evaluate(0), tvm.tirx.Evaluate(1)]),
+                tvm.tirx.Evaluate(2),
             ]
         ),
     )
@@ -3342,7 +3024,8 @@ def undefined_stride_in_decl_buffer():
     @T.prim_func(check_well_formed=False)
     def func():
         stride = T.int32()
-        buf = T.decl_buffer(shape=[1], dtype="float32", strides=[stride])
+        data_ptr = T.handle("float32")
+        buf = T.decl_buffer(shape=[1], dtype="float32", data=data_ptr, strides=[stride])
         T.evaluate(buf[0])
 
     return func
@@ -3353,7 +3036,8 @@ def undefined_elem_offset_in_decl_buffer():
     @T.prim_func(check_well_formed=False)
     def func():
         elem_offset = T.int32()
-        buf = T.decl_buffer(shape=[1], dtype="float32", elem_offset=elem_offset)
+        data_ptr = T.handle("float32")
+        buf = T.decl_buffer(shape=[1], dtype="float32", data=data_ptr, elem_offset=elem_offset)
         T.evaluate(buf[0])
 
     return func
@@ -3367,7 +3051,7 @@ def subroutine_call_without_arguments():
             # Should be equivalent to the bare "mod.subroutine()", but
             # that relies on `GlobalVar.__call__` returning the
             # correct IR type.
-            tir.call_tir(mod.subroutine)
+            tirx.call_tir(mod.subroutine)
 
         @T.prim_func
         def subroutine():
@@ -3408,8 +3092,8 @@ def func_attr_with_list():
         B: T.Buffer((128, 128), "float32"),
         D: T.Buffer((128, 128), "float32"),
     ) -> None:
-        T.func_attr({"global_symbol": "main", "tir.noalias": True, "layout_free_buffers": [1]})
-        C = T.alloc_buffer([128, 128], dtype="float32")
+        T.func_attr({"global_symbol": "main", "tirx.noalias": True, "layout_free_buffers": [1]})
+        C = T.sblock_alloc_buffer([128, 128], dtype="float32")
         for i0, i1, i2 in T.grid(128, 128, 128):
             with T.sblock("C"):
                 x, y, k = T.axis.remap("SSR", [i0, i1, i2])
@@ -3569,7 +3253,7 @@ def relax_match_cast_struct_info_proxy():
 
 def relax_symbolic_size_var():
     """Relax symbolic variables may be SizeVar"""
-    N = tvm.tir.SizeVar("N", "int64")
+    N = tvm.tirx.SizeVar("N", "int64")
 
     @R.function
     def func(A: R.Tensor([N], "float16")):
@@ -3596,7 +3280,6 @@ def relax_float_symbolic_var():
 ir_generator = tvm.testing.parameter(
     launch_env_thread,
     opt_gemm_lower,
-    opt_gemm_mod_host,
     opt_conv_tensorcore_lower,
     opt_conv_tensorcore_mod_host,
     vthread_func,
@@ -3637,6 +3320,7 @@ ir_generator = tvm.testing.parameter(
     void_ptr,
     decl_buffer,
     allocate_and_decl_buffer,
+    alloc_buffer_example,
     float_infinity,
     minimal_i32_literal,
     boolean_argument,
@@ -3652,8 +3336,7 @@ ir_generator = tvm.testing.parameter(
     *nested_boolean_expressions(),
     multi_env_threads,
     intrinsic_pow,
-    let_stmt_var,
-    let_stmt_value,
+    bind_var,
     string_stride,
     string_stride_int64,
     merge_shape_var_def,
@@ -3726,6 +3409,54 @@ def test_address_of_buffer():
         T.evaluate(T.address_of(A))
 
     assert "T.address_of(A[0, 0])" in func.script()
+
+
+def test_assert_stmt_roundtrip_runtime_error():
+    """RuntimeError assert roundtrips through print->parse."""
+
+    @T.prim_func
+    def func(x: T.int32):
+        assert x > 0, ("RuntimeError", ["x must be positive"])
+
+    script = func.script(show_meta=True)
+    roundtrip = tvm.script.from_source(script, check_well_formed=False)
+    tvm.ir.assert_structural_equal(func, roundtrip, map_free_vars=True)
+
+
+def test_assert_stmt_roundtrip_value_error():
+    """ValueError assert roundtrips through print->parse."""
+
+    @T.prim_func
+    def func(x: T.int32):
+        assert x > 0, ("ValueError", ["Shape mismatch"])
+
+    script = func.script(show_meta=True)
+    roundtrip = tvm.script.from_source(script, check_well_formed=False)
+    tvm.ir.assert_structural_equal(func, roundtrip, map_free_vars=True)
+
+
+def test_assert_stmt_roundtrip_type_error():
+    """TypeError assert roundtrips through print->parse."""
+
+    @T.prim_func
+    def func(x: T.int32):
+        assert x > 0, ("TypeError", ["Expected Tensor but got int"])
+
+    script = func.script(show_meta=True)
+    roundtrip = tvm.script.from_source(script, check_well_formed=False)
+    tvm.ir.assert_structural_equal(func, roundtrip, map_free_vars=True)
+
+
+def test_assert_stmt_roundtrip_multi_parts():
+    """Multi-part message assert roundtrips with structural equality."""
+
+    @T.prim_func
+    def func(x: T.int32):
+        assert x > 0, ("TypeError", ["Expected ", "Tensor", " but got ", "int"])
+
+    script = func.script(show_meta=True)
+    roundtrip = tvm.script.from_source(script, check_well_formed=False)
+    tvm.ir.assert_structural_equal(func, roundtrip, map_free_vars=True)
 
 
 if __name__ == "__main__":

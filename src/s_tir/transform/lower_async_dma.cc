@@ -26,20 +26,21 @@
 #include <tvm/arith/iter_affine_map.h>
 #include <tvm/ffi/reflection/registry.h>
 #include <tvm/s_tir/analysis.h>
+#include <tvm/s_tir/stmt.h>
 #include <tvm/s_tir/transform.h>
-#include <tvm/tir/buffer.h>
-#include <tvm/tir/stmt.h>
-#include <tvm/tir/stmt_functor.h>
+#include <tvm/tirx/buffer.h>
+#include <tvm/tirx/stmt.h>
+#include <tvm/tirx/stmt_functor.h>
 
 #include <optional>
 #include <set>
 
 #include "../../arith/ir_mutator_with_analyzer.h"
-#include "../../tir/transform/ir_utils.h"
+#include "../../tirx/transform/ir_utils.h"
 
 namespace tvm {
 namespace s_tir {
-using namespace tvm::tir;
+using namespace tvm::tirx;
 
 class AsyncDMALowerer : public arith::IRMutatorWithAnalyzer {
  public:
@@ -88,12 +89,12 @@ class AsyncDMALowerer : public arith::IRMutatorWithAnalyzer {
     // attr [0] "async_wait_inflight_count" = 0;
     //
     // To this:
-    // @tir.dma_wait(
+    // @tirx.dma_wait(
     //   0, /* queue id */
     //   0, /* in flight count */
     //   dtype=int32
     // )
-    if (op->attr_key == tir::attr::async_wait_queue_scope) {
+    if (op->attr_key == s_tir::attr::async_wait_queue_scope) {
       // get queue ID
       auto queue_id_node = op->value.as<IntImmNode>();
       TVM_FFI_ICHECK(queue_id_node);
@@ -108,7 +109,7 @@ class AsyncDMALowerer : public arith::IRMutatorWithAnalyzer {
       }
 
       auto async_wait = op->body.as<AttrStmtNode>();
-      if (!async_wait || async_wait->attr_key != tir::attr::async_wait_inflight_count) {
+      if (!async_wait || async_wait->attr_key != s_tir::attr::async_wait_inflight_count) {
         DLOG(INFO) << "AsyncDMALowerer exiting because the body of the `AttrStmtNode` with key "
                       "`async_wait_queue_scope` does not contain an `AttrStmtNode` with key "
                       "`async_wait_inflight_count`";
@@ -128,14 +129,14 @@ class AsyncDMALowerer : public arith::IRMutatorWithAnalyzer {
       // }
       //
       // To this:
-      // @tir.dma_copy(
+      // @tirx.dma_copy(
       //   0, /* queue id */
-      //   @tir.address_of(A_global[0], dtype=handle),
-      //   @tir.address_of(A[0], dtype=handle),
+      //   @tirx.address_of(A_global[0], dtype=handle),
+      //   @tirx.address_of(A[0], dtype=handle),
       //   128, /* size */
       //   dtype=int32
       // )
-    } else if (op->attr_key == tir::attr::async_commit_queue_scope) {
+    } else if (op->attr_key == s_tir::attr::async_commit_queue_scope) {
       // get queue ID
       auto queue_id_node = op->value.as<IntImmNode>();
       TVM_FFI_ICHECK(queue_id_node);
@@ -171,7 +172,7 @@ Pass LowerAsyncDMA() {
     auto fptr = f.CopyOnWrite();
     arith::Analyzer analyzer;
     bool dma_bypass_cache =
-        ctx->GetConfig<Bool>("tir.experimental_dma_bypass_cache", Bool(false)).value();
+        ctx->GetConfig<Bool>("tirx.experimental_dma_bypass_cache", Bool(false)).value();
     fptr->body = AsyncDMALowerer(dma_bypass_cache, &analyzer)(std::move(fptr->body));
     return f;
   };

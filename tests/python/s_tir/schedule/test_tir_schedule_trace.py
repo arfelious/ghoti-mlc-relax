@@ -23,10 +23,10 @@ import pytest
 
 import tvm
 import tvm.testing
-from tvm import s_tir, tir
+from tvm import s_tir, tirx
 from tvm.s_tir.schedule import Instruction, InstructionKind, LoopRV, SBlockRV, Trace
 from tvm.s_tir.schedule.testing import assert_structural_equal_ignore_global_symbol
-from tvm.script import tir as T
+from tvm.script import tirx as T
 
 # pylint: disable=no-member,invalid-name,unused-variable
 
@@ -34,7 +34,7 @@ from tvm.script import tir as T
 @T.prim_func
 def elementwise(a: T.handle, c: T.handle) -> None:
     A = T.match_buffer(a, (128, 128))
-    B = T.alloc_buffer((128, 128))
+    B = T.sblock_alloc_buffer((128, 128))
     C = T.match_buffer(c, (128, 128))
     for i, j in T.grid(128, 128):
         with T.sblock("B"):
@@ -322,13 +322,13 @@ def test_apply_json_to_schedule_1():
 
 
 def test_apply_json_to_schedule_sample_categorical():
-    var = tir.Var("v", "int32")
+    var = tirx.Var("v", "int32")
     trace1 = Trace(
         insts=[
             Instruction(
                 kind=InstructionKind.get("SampleCategorical"),
                 inputs=[],
-                attrs=[[tvm.tir.IntImm("int32", 3)], [tvm.tir.FloatImm("float32", 1.0)]],
+                attrs=[[tvm.tirx.IntImm("int32", 3)], [tvm.tirx.FloatImm("float32", 1.0)]],
                 outputs=[var],
             )
         ],
@@ -366,7 +366,7 @@ def _test_apply_annotation_trace_from_json(annotation: str):
     @T.prim_func
     def elementwise_expected(a: T.handle, c: T.handle) -> None:
         A = T.match_buffer(a, (128, 128))
-        B = T.alloc_buffer((128, 128))
+        B = T.sblock_alloc_buffer((128, 128))
         C = T.match_buffer(c, (128, 128))
         for i, j in T.grid(128, 128):
             with T.sblock("B"):

@@ -37,12 +37,12 @@ import sys
 import pytest
 
 import tvm
-from tvm import tir
+from tvm import tirx
 from tvm.s_tir.schedule.testing import (
     assert_structural_equal_ignore_global_symbol,
     verify_trace_roundtrip,
 )
-from tvm.script import tir as T
+from tvm.script import tirx as T
 
 # fmt: off
 # pylint: disable=no-member,invalid-name,unused-variable,line-too-long,redefined-outer-name,unexpected-keyword-arg,too-many-nested-blocks,not-callable
@@ -77,7 +77,7 @@ def cuda_matmul_read_at_a(a: T.handle, b: T.handle, c: T.handle) -> None:
     A = T.match_buffer(a, [2048, 2048], dtype="float32")
     B = T.match_buffer(b, [2048, 2048], dtype="float32")
     C = T.match_buffer(c, [2048, 2048], dtype="float32")
-    A_shared = T.alloc_buffer([2048, 2048], dtype="float32", scope="shared")
+    A_shared = T.sblock_alloc_buffer([2048, 2048], dtype="float32", scope="shared")
     for by in T.thread_binding(0, 32, thread="blockIdx.y"):
         for bx in T.thread_binding(0, 32, thread="blockIdx.x"):
             for vy in T.thread_binding(0, 2, thread="vthread.y"):
@@ -111,8 +111,8 @@ def cuda_matmul_read_at_ab(a: T.handle, b: T.handle, c: T.handle) -> None:
     A = T.match_buffer(a, [2048, 2048], dtype="float32")
     B = T.match_buffer(b, [2048, 2048], dtype="float32")
     C = T.match_buffer(c, [2048, 2048], dtype="float32")
-    A_shared = T.alloc_buffer([2048, 2048], dtype="float32", scope="shared")
-    B_shared = T.alloc_buffer([2048, 2048], dtype="float32", scope="shared")
+    A_shared = T.sblock_alloc_buffer([2048, 2048], dtype="float32", scope="shared")
+    B_shared = T.sblock_alloc_buffer([2048, 2048], dtype="float32", scope="shared")
     for by in T.thread_binding(0, 32, thread="blockIdx.y"):
         for bx in T.thread_binding(0, 32, thread="blockIdx.x"):
             for vy in T.thread_binding(0, 2, thread="vthread.y"):
@@ -153,9 +153,9 @@ def cuda_matmul_write_at_c(a: T.handle, b: T.handle, c: T.handle) -> None:
     A = T.match_buffer(a, [2048, 2048], dtype="float32")
     B = T.match_buffer(b, [2048, 2048], dtype="float32")
     C = T.match_buffer(c, [2048, 2048], dtype="float32")
-    A_shared = T.alloc_buffer([2048, 2048], dtype="float32", scope="shared")
-    B_shared = T.alloc_buffer([2048, 2048], dtype="float32", scope="shared")
-    C_shared = T.alloc_buffer([2048, 2048], dtype="float32", scope="shared")
+    A_shared = T.sblock_alloc_buffer([2048, 2048], dtype="float32", scope="shared")
+    B_shared = T.sblock_alloc_buffer([2048, 2048], dtype="float32", scope="shared")
+    C_shared = T.sblock_alloc_buffer([2048, 2048], dtype="float32", scope="shared")
     for by in T.thread_binding(0, 32, thread="blockIdx.y"):
         for bx in T.thread_binding(0, 32, thread="blockIdx.x"):
             for vy in T.thread_binding(0, 2, thread="vthread.y"):

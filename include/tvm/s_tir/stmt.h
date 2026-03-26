@@ -31,6 +31,49 @@ namespace tvm {
 namespace s_tir {
 namespace attr {
 
+/*!
+ * \brief Annotations for invoking and synchronizing asynchronous operations.
+ */
+constexpr const char* async_commit_queue_scope = "async_commit_queue_scope";
+constexpr const char* async_wait_queue_scope = "async_wait_queue_scope";
+constexpr const char* async_wait_inflight_count = "async_wait_inflight_count";
+
+/*!
+ * \brief Mark that the attached statement runs asynchronously.
+ */
+constexpr const char* async_scope = "async_scope";
+
+/*!
+ * \brief Marks production of double buffer data
+ */
+constexpr const char* double_buffer_scope = "double_buffer_scope";
+
+/*!
+ * \brief Marks region used by double buffer write
+ */
+constexpr const char* double_buffer_write = "double_buffer_write";
+
+/*!
+ * \brief Mark that the shape of TensorCore fragment
+ */
+constexpr const char* fragment_shape = "fragment_shape";
+
+/*!
+ * \brief Mark that the layout of TensorCore fragment
+ */
+constexpr const char* fragment_layout = "fragment_layout";
+
+/*!
+ * \brief Mark that the loop should be partitioned.
+ */
+constexpr const char* pragma_loop_partition_hint = "pragma_loop_partition_hint";
+
+/*! \brief Mark of reduce scope */
+constexpr const char* reduce_scope = "reduce_scope";
+
+/*! \brief Mark launching of a virtual thread. */
+constexpr const char* virtual_thread = "virtual_thread";
+
 // -----------------------------------------------------------------------
 // meta_schedule annotations
 // -----------------------------------------------------------------------
@@ -110,7 +153,7 @@ constexpr const char* meta_schedule_inline_rule = "meta_schedule.inline_rule";
  *       if (mask & 1) the read region should be detected,
  *       if (mask & 2) the write region should be detected.
  */
-constexpr const char* script_parsing_detect_access = "tir.script_parsing_detect_access";
+constexpr const char* script_parsing_detect_access = "tirx.script_parsing_detect_access";
 
 /*!
  * \brief Mark that the block need to add predicate for block var bounds during lowering
@@ -133,7 +176,8 @@ constexpr const char* software_pipeline_async_stages = "software_pipeline_async_
 constexpr const char* layout_free_buffers = "layout_free_buffers";
 
 /*! \brief Mark the local stage for the shared memory access should be added. */
-constexpr const char* manifest_shared_memory_local_stage = "tir.manifest_shared_memory_local_stage";
+constexpr const char* manifest_shared_memory_local_stage =
+    "tirx.manifest_shared_memory_local_stage";
 
 /*!
  * \brief Mark alignment of buffer dimension

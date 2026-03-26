@@ -20,12 +20,12 @@ import pytest
 
 import tvm
 import tvm.testing
-from tvm import tir
+from tvm import tirx
 from tvm.s_tir.schedule.testing import (
     assert_structural_equal_ignore_global_symbol,
     verify_trace_roundtrip,
 )
-from tvm.script import tir as T
+from tvm.script import tirx as T
 
 # pylint: disable=no-member,invalid-name,unused-variable,unexpected-keyword-arg
 
@@ -36,9 +36,9 @@ def matmul_before(
     B: T.Buffer((127, 127), "float32"),
     C: T.Buffer((128, 127), "float32"),
 ) -> None:
-    A_shared = T.alloc_buffer((128, 127), "float32", scope="shared")
-    B_shared = T.alloc_buffer((127, 127), "float32", scope="shared")
-    C_shared = T.alloc_buffer((128, 127), "float32", scope="shared")
+    A_shared = T.sblock_alloc_buffer((128, 127), "float32", scope="shared")
+    B_shared = T.sblock_alloc_buffer((127, 127), "float32", scope="shared")
+    C_shared = T.sblock_alloc_buffer((128, 127), "float32", scope="shared")
     for i0, i1 in T.grid(128, 127):
         with T.sblock("A"):
             i, j = T.axis.remap("SS", [i0, i1])
@@ -65,9 +65,9 @@ def matmul_expected(
     B: T.Buffer((127, 127), "float32"),
     C: T.Buffer((128, 127), "float32"),
 ) -> None:
-    A_shared_padded = T.alloc_buffer([128, 128], dtype="float32", scope="shared")
-    B_shared_padded = T.alloc_buffer([128, 128], dtype="float32", scope="shared")
-    C_shared_padded = T.alloc_buffer([128, 128], dtype="float32", scope="shared")
+    A_shared_padded = T.sblock_alloc_buffer([128, 128], dtype="float32", scope="shared")
+    B_shared_padded = T.sblock_alloc_buffer([128, 128], dtype="float32", scope="shared")
+    C_shared_padded = T.sblock_alloc_buffer([128, 128], dtype="float32", scope="shared")
     for i0, i1 in T.grid(128, 128):
         with T.sblock("A"):
             i, j = T.axis.remap("SS", [i0, i1])
@@ -133,8 +133,8 @@ def test_pad_matmul():
         A = T.match_buffer(a, (128, 128), "float32")
         B = T.match_buffer(b, (n, 128), "float32")
         C = T.match_buffer(c, (128, n), "float32")
-        B_pad = T.alloc_buffer(((n + 31) // 32 * 32, 128))
-        C_pad = T.alloc_buffer((128, (n + 31) // 32 * 32))
+        B_pad = T.sblock_alloc_buffer(((n + 31) // 32 * 32, 128))
+        C_pad = T.sblock_alloc_buffer((128, (n + 31) // 32 * 32))
         for i0, i1 in T.grid((n + 31) // 32 * 32, 128):
             with T.sblock("B_pad"):
                 v0, v1 = T.axis.remap("SS", [i0, i1])
@@ -167,13 +167,13 @@ def test_pad_matmul_2():
         m: T.handle,
         d: T.handle,
     ):
-        T.func_attr({"tir.noalias": True})
+        T.func_attr({"tirx.noalias": True})
         n = T.int32()
         A = T.match_buffer(a, (1, n, 4096))
         B = T.match_buffer(b, (11008, 4096))
         M = T.match_buffer(m, (1, n, 11008))
         D = T.match_buffer(d, (1, n, 11008))
-        C = T.alloc_buffer((1, n, 11008))
+        C = T.sblock_alloc_buffer((1, n, 11008))
         for i0, i1, i2, k in T.grid(1, n, 11008, 4096):
             with T.sblock("C"):
                 v_i0, v_i1, v_i2, v_k = T.axis.remap("SSSR", [i0, i1, i2, k])
@@ -189,16 +189,16 @@ def test_pad_matmul_2():
 
     @T.prim_func
     def after(a: T.handle, b: T.handle, m: T.handle, d: T.handle):
-        T.func_attr({"tir.noalias": True})
+        T.func_attr({"tirx.noalias": True})
         n = T.int32()
         A = T.match_buffer(a, (1, n, 4096))
         B = T.match_buffer(b, (11008, 4096))
         M = T.match_buffer(m, (1, n, 11008))
         D = T.match_buffer(d, (1, n, 11008))
         # with T.sblock("root"):
-        C = T.alloc_buffer((1, n, 11008))
-        A_pad = T.alloc_buffer((1, (n + 31) // 32 * 32, 4096))
-        C_pad = T.alloc_buffer((1, (n + 31) // 32 * 32, 11008))
+        C = T.sblock_alloc_buffer((1, n, 11008))
+        A_pad = T.sblock_alloc_buffer((1, (n + 31) // 32 * 32, 4096))
+        C_pad = T.sblock_alloc_buffer((1, (n + 31) // 32 * 32, 11008))
         for i0, i1, i2 in T.grid(1, (n + 31) // 32 * 32, 4096):
             with T.sblock("A_pad"):
                 v0, v1, v2 = T.axis.remap("SSS", [i0, i1, i2])
@@ -236,12 +236,12 @@ def test_pad_rms():
         w: T.handle,
         r: T.handle,
     ):
-        T.func_attr({"tir.noalias": True})
+        T.func_attr({"tirx.noalias": True})
         n = T.int32()
         A = T.match_buffer(a, (1, n, 4096))
         W = T.match_buffer(w, (4096,), "float32")
         R = T.match_buffer(r, (1, n, 4096), "float32")
-        S = T.alloc_buffer((1, n), "float32")
+        S = T.sblock_alloc_buffer((1, n), "float32")
         for bsz, i, k in T.grid(1, n, 4096):
             with T.sblock("S"):
                 v_bsz, v_i, v_k = T.axis.remap("SSR", [bsz, i, k])
@@ -260,14 +260,14 @@ def test_pad_rms():
 
     @T.prim_func
     def after(a: T.handle, w: T.handle, r: T.handle):
-        T.func_attr({"tir.noalias": True})
+        T.func_attr({"tirx.noalias": True})
         n = T.int32()
         A = T.match_buffer(a, (1, n, 4096))
         W = T.match_buffer(w, (4096,), "float32")
         R = T.match_buffer(r, (1, n, 4096))
-        S = T.alloc_buffer((1, n))
-        A_pad = T.alloc_buffer((1, (n + 31) // 32 * 32, 4096))
-        S_pad = T.alloc_buffer((1, (n + 31) // 32 * 32))
+        S = T.sblock_alloc_buffer((1, n))
+        A_pad = T.sblock_alloc_buffer((1, (n + 31) // 32 * 32, 4096))
+        S_pad = T.sblock_alloc_buffer((1, (n + 31) // 32 * 32))
         for i0, i1, i2 in T.grid(1, (n + 31) // 32 * 32, 4096):
             with T.sblock("A_pad"):
                 v0, v1, v2 = T.axis.remap("SSS", [i0, i1, i2])

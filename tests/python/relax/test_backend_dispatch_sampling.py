@@ -24,7 +24,7 @@ from tvm.ir.base import assert_structural_equal
 from tvm.relax.backend import DispatchSampling
 from tvm.script import ir as I
 from tvm.script import relax as R
-from tvm.script import tir as T
+from tvm.script import tirx as T
 
 
 @I.ir_module
@@ -86,7 +86,7 @@ def test_dispatch_multinomial_from_uniform_gpu():
     class Expected:
         @T.prim_func
         def parallel_sampling_from_prob(var_prob: T.handle, var_uniform_samples: T.handle, var_row_indices: T.handle, var_sampled_token_ids: T.handle):
-            T.func_attr({"tir.is_scheduled": True})
+            T.func_attr({"tirx.is_scheduled": True})
             n, vocab_size = T.int64(), T.int64()
             prob = T.match_buffer(var_prob, (n, vocab_size))
             batch_size = T.int64()
@@ -94,9 +94,9 @@ def test_dispatch_multinomial_from_uniform_gpu():
             row_indices = T.match_buffer(var_row_indices, (batch_size, 1), "int64")
             token_ids = T.match_buffer(var_sampled_token_ids, (batch_size, 1), "int64")
             # with T.sblock("root"):
-            aggregate = T.alloc_buffer((), scope="local")
-            sample_id_local = T.alloc_buffer((), "int64", scope="local")
-            step_iter = T.alloc_buffer((), "int32", scope="local")
+            aggregate = T.sblock_alloc_buffer((), scope="local")
+            sample_id_local = T.sblock_alloc_buffer((), "int64", scope="local")
+            step_iter = T.sblock_alloc_buffer((), "int32", scope="local")
             for bx in T.thread_binding(batch_size, thread="blockIdx.x"):
                 row_idx: T.int64 = row_indices[bx, 0]
                 for ty in T.thread_binding(T.int64(4), thread="threadIdx.y"):
@@ -108,13 +108,13 @@ def test_dispatch_multinomial_from_uniform_gpu():
                             with T.sblock(""):
                                 T.reads(step_iter[()], prob[row_idx, T.Cast("int64", step_iter[()]) * T.int64(512) + ty * T.int64(128) + tx * T.int64(4):T.Cast("int64", step_iter[()]) * T.int64(512) + ty * T.int64(128) + tx * T.int64(4) + T.int64(4)], aggregate[()])
                                 T.writes(sample_id_local[()], aggregate[()])
-                                prob_gt_threshold = T.alloc_buffer((T.int64(4),), scope="local")
-                                cumsum = T.alloc_buffer((T.int64(512),), scope="shared")
-                                greater_than_u = T.alloc_buffer((T.int64(4),), "bool", scope="local")
-                                mask = T.alloc_buffer((T.int64(4),), "bool", scope="local")
-                                valid = T.alloc_buffer((T.int64(4),), "bool", scope="local")
-                                indices = T.alloc_buffer((T.int64(4),), "int64", scope="local")
-                                step_aggregate = T.alloc_buffer((), scope="local")
+                                prob_gt_threshold = T.sblock_alloc_buffer((T.int64(4),), scope="local")
+                                cumsum = T.sblock_alloc_buffer((T.int64(512),), scope="shared")
+                                greater_than_u = T.sblock_alloc_buffer((T.int64(4),), "bool", scope="local")
+                                mask = T.sblock_alloc_buffer((T.int64(4),), "bool", scope="local")
+                                valid = T.sblock_alloc_buffer((T.int64(4),), "bool", scope="local")
+                                indices = T.sblock_alloc_buffer((T.int64(4),), "int64", scope="local")
+                                step_aggregate = T.sblock_alloc_buffer((), scope="local")
                                 for v in T.unroll(T.int64(4)):
                                     idx: T.int64 = T.Cast("int64", step_iter[()]) * T.int64(512) + ty * T.int64(128) + tx * T.int64(4) + v
                                     prob_local: T.float32 = T.if_then_else(idx < vocab_size, prob[row_idx, idx], T.Cast("float32", 0))
@@ -123,8 +123,8 @@ def test_dispatch_multinomial_from_uniform_gpu():
                                 with T.sblock(""):
                                     T.reads(prob_gt_threshold[T.int64(0):T.int64(4)])
                                     T.writes(step_aggregate[()])
-                                    local_sum = T.alloc_buffer((), scope="local")
-                                    shared_buf = T.alloc_buffer((T.int64(128),), scope="shared")
+                                    local_sum = T.sblock_alloc_buffer((), scope="local")
+                                    shared_buf = T.sblock_alloc_buffer((T.int64(128),), scope="shared")
                                     idx: T.int64 = ty * T.int64(32) + tx
                                     local_sum[()] = T.Cast("float32", 0)
                                     for i in T.unroll(T.int64(4)):
@@ -154,7 +154,7 @@ def test_dispatch_multinomial_from_uniform_gpu():
                                     with T.sblock(""):
                                         T.reads(greater_than_u[T.int64(0):T.int64(4)])
                                         T.writes(mask[T.int64(0):T.int64(4)])
-                                        shared_buf = T.alloc_buffer((T.int64(128),), "bool", scope="shared")
+                                        shared_buf = T.sblock_alloc_buffer((T.int64(128),), "bool", scope="shared")
                                         tx_idx: T.int64 = ty * T.int64(32) + tx
                                         shared_buf[tx_idx] = greater_than_u[T.int64(3)]
                                         mask[0] = T.if_then_else(tx_idx != T.int64(0), T.Cast("int8", greater_than_u[0]) != T.Cast("int8", shared_buf[tx_idx - T.int64(1)]), greater_than_u[0])
@@ -166,8 +166,8 @@ def test_dispatch_multinomial_from_uniform_gpu():
                                     with T.sblock(""):
                                         T.reads(mask[T.int64(0):T.int64(4)], indices[T.int64(0):T.int64(4)])
                                         T.writes(sample_id_local[()])
-                                        local_sum = T.alloc_buffer((), "int64", scope="local")
-                                        shared_buf = T.alloc_buffer((T.int64(128),), "int64", scope="shared")
+                                        local_sum = T.sblock_alloc_buffer((), "int64", scope="local")
+                                        shared_buf = T.sblock_alloc_buffer((T.int64(128),), "int64", scope="shared")
                                         idx: T.int64 = ty * T.int64(32) + tx
                                         local_sum[()] = T.Cast("int64", vocab_size - T.int64(1))
                                         for i in T.unroll(T.int64(4)):

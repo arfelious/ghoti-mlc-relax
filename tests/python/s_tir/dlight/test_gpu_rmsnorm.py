@@ -20,7 +20,7 @@ import tvm.testing
 from tvm.ir import IRModule, assert_structural_equal
 from tvm.s_tir import dlight as dl
 from tvm.script import ir as I
-from tvm.script import tir as T
+from tvm.script import tirx as T
 from tvm.target import Target
 
 
@@ -39,17 +39,17 @@ def test_rms_norm_with_casting():
     class Before:
         @T.prim_func
         def main(var_data: T.handle, weight: T.Buffer((4096,), "float16"), var_T_cast: T.handle):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             n = T.int32()
             data = T.match_buffer(var_data, (1, n, 4096), "float16")
             T_cast = T.match_buffer(var_T_cast, (1, n, 4096), "float16")
             # with T.sblock("root"):
-            T_cast_1 = T.alloc_buffer((1, n, 4096))
-            T_multiply = T.alloc_buffer((1, n, 4096))
-            T_multiply_red = T.alloc_buffer((1, n))
-            rsqrt = T.alloc_buffer((1, n))
-            T_cast_2 = T.alloc_buffer((4096,))
-            T_rms_norm = T.alloc_buffer((1, n, 4096))
+            T_cast_1 = T.sblock_alloc_buffer((1, n, 4096))
+            T_multiply = T.sblock_alloc_buffer((1, n, 4096))
+            T_multiply_red = T.sblock_alloc_buffer((1, n))
+            rsqrt = T.sblock_alloc_buffer((1, n))
+            T_cast_2 = T.sblock_alloc_buffer((4096,))
+            T_rms_norm = T.sblock_alloc_buffer((1, n, 4096))
             for ax0, ax1, ax2 in T.grid(1, n, 4096):
                 with T.sblock("T_cast"):
                     v_ax0, v_ax1, v_ax2 = T.axis.remap("SSS", [ax0, ax1, ax2])
@@ -99,16 +99,16 @@ def test_rms_norm_with_casting():
     class After:
         @T.prim_func
         def main(var_data: T.handle, weight: T.Buffer((4096,), "float16"), var_T_cast: T.handle):
-            T.func_attr({"tir.is_scheduled": True, "tir.noalias": True})
+            T.func_attr({"tirx.is_scheduled": True, "tirx.noalias": True})
             n = T.int32()
             data = T.match_buffer(var_data, (1, n, 4096), "float16")
             T_cast = T.match_buffer(var_T_cast, (1, n, 4096), "float16")
             # with T.sblock("root"):
-            T_multiply_local = T.alloc_buffer((1, n, 4096), scope="local")
-            T_multiply_red_local = T.alloc_buffer((1, n), scope="local")
-            rsqrt_shared = T.alloc_buffer((1, n), scope="shared")
-            T_rms_norm_local = T.alloc_buffer((1, n, 4096), scope="local")
-            data_local = T.alloc_buffer((1, n, 4096), "float16", scope="local")
+            T_multiply_local = T.sblock_alloc_buffer((1, n, 4096), scope="local")
+            T_multiply_red_local = T.sblock_alloc_buffer((1, n), scope="local")
+            rsqrt_shared = T.sblock_alloc_buffer((1, n), scope="shared")
+            T_rms_norm_local = T.sblock_alloc_buffer((1, n, 4096), scope="local")
+            data_local = T.sblock_alloc_buffer((1, n, 4096), "float16", scope="local")
             for ax0_ax1_fused in T.thread_binding(n, thread="blockIdx.x"):
                 for ax2_0 in T.thread_binding(512, thread="threadIdx.x"):
                     for ax2_1 in range(1):
@@ -171,15 +171,15 @@ def test_rms_norm_without_casting():
     class Before:
         @T.prim_func
         def main(var_data: T.handle, weight: T.Buffer((4096,), "float32"), var_T_cast: T.handle):
-            T.func_attr({"tir.noalias": True})
+            T.func_attr({"tirx.noalias": True})
             n = T.int32()
             data = T.match_buffer(var_data, (1, n, 4096))
             T_cast = T.match_buffer(var_T_cast, (1, n, 4096))
             # with T.sblock("root"):
-            T_multiply = T.alloc_buffer((1, n, 4096))
-            T_multiply_red = T.alloc_buffer((1, n))
-            rsqrt = T.alloc_buffer((1, n))
-            T_rms_norm = T.alloc_buffer((1, n, 4096))
+            T_multiply = T.sblock_alloc_buffer((1, n, 4096))
+            T_multiply_red = T.sblock_alloc_buffer((1, n))
+            rsqrt = T.sblock_alloc_buffer((1, n))
+            T_rms_norm = T.sblock_alloc_buffer((1, n, 4096))
             for ax0, ax1, ax2 in T.grid(1, n, 4096):
                 with T.sblock("T_multiply"):
                     v_ax0, v_ax1, v_ax2 = T.axis.remap("SSS", [ax0, ax1, ax2])
@@ -217,16 +217,16 @@ def test_rms_norm_without_casting():
     class After:
         @T.prim_func
         def main(var_data: T.handle, weight: T.Buffer((4096,), "float32"), var_T_cast: T.handle):
-            T.func_attr({"tir.is_scheduled": True, "tir.noalias": True})
+            T.func_attr({"tirx.is_scheduled": True, "tirx.noalias": True})
             n = T.int32()
             data = T.match_buffer(var_data, (1, n, 4096))
             T_cast = T.match_buffer(var_T_cast, (1, n, 4096))
             # with T.sblock("root"):
-            T_multiply_local = T.alloc_buffer((1, n, 4096), scope="local")
-            T_multiply_red_local = T.alloc_buffer((1, n), scope="local")
-            rsqrt_shared = T.alloc_buffer((1, n), scope="shared")
-            T_rms_norm_local = T.alloc_buffer((1, n, 4096), scope="local")
-            data_local = T.alloc_buffer((1, n, 4096), scope="local")
+            T_multiply_local = T.sblock_alloc_buffer((1, n, 4096), scope="local")
+            T_multiply_red_local = T.sblock_alloc_buffer((1, n), scope="local")
+            rsqrt_shared = T.sblock_alloc_buffer((1, n), scope="shared")
+            T_rms_norm_local = T.sblock_alloc_buffer((1, n, 4096), scope="local")
+            data_local = T.sblock_alloc_buffer((1, n, 4096), scope="local")
             for ax0_ax1_fused in T.thread_binding(n, thread="blockIdx.x"):
                 for ax2_0 in T.thread_binding(512, thread="threadIdx.x"):
                     for ax2_1 in range(1):

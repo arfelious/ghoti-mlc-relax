@@ -18,11 +18,17 @@
 
 # pylint: disable=redefined-builtin,unused-argument
 import tvm
-from tvm import te
-from tvm.tir import PrimExpr
+from tvm import DataType, DataTypeCode, te
+from tvm.tirx import PrimExpr
 
 from . import cpp, tag
 from .utils import get_const_tuple
+
+
+def _require_float_tensor(op_name, x):
+    if DataType(x.dtype).type_code not in (DataTypeCode.FLOAT, DataTypeCode.BFLOAT):
+        raise TypeError(f"topi.{op_name} only supports floating-point inputs, but got {x.dtype}")
+    return x
 
 
 @tvm.te.tag_scope(tag=tag.ELEMWISE)
@@ -211,6 +217,7 @@ def acos(x):
     y : tvm.te.Tensor
         The result.
     """
+    x = _require_float_tensor("acos", x)
     return te.compute(x.shape, lambda *i: te.acos(x(*i)))
 
 
@@ -228,6 +235,7 @@ def acosh(x):
     y : tvm.te.Tensor
         The result.
     """
+    x = _require_float_tensor("acosh", x)
     return te.compute(x.shape, lambda *i: te.acosh(x(*i)))
 
 
@@ -245,6 +253,7 @@ def asin(x):
     y : tvm.te.Tensor
         The result.
     """
+    x = _require_float_tensor("asin", x)
     return te.compute(x.shape, lambda *i: te.asin(x(*i)))
 
 
@@ -262,6 +271,7 @@ def asinh(x):
     y : tvm.te.Tensor
         The result.
     """
+    x = _require_float_tensor("asinh", x)
     return te.compute(x.shape, lambda *i: te.asinh(x(*i)))
 
 
@@ -296,6 +306,7 @@ def atanh(x):
     y : tvm.te.Tensor
         The result.
     """
+    x = _require_float_tensor("atanh", x)
     return te.compute(x.shape, lambda *i: te.atanh(x(*i)))
 
 
@@ -607,9 +618,9 @@ def clip(x, a_min, a_max):
     ----------
     x : tvm.te.Tensor
         Input argument.
-    a_min : tvm.tir.PrimExpr
+    a_min : tvm.tirx.PrimExpr
         Minimum value.
-    a_max : tvm.tir.PrimExpr
+    a_max : tvm.tirx.PrimExpr
         Maximum value.
 
     Returns
@@ -621,14 +632,14 @@ def clip(x, a_min, a_max):
     def _compute(*indices):
         value = x(*indices)
         const_min = (
-            tvm.tir.Cast(value.dtype, a_min)
+            tvm.tirx.Cast(value.dtype, a_min)
             if isinstance(a_min, PrimExpr)
-            else tvm.tir.const(a_min, value.dtype)
+            else tvm.tirx.const(a_min, value.dtype)
         )
         const_max = (
-            tvm.tir.Cast(value.dtype, a_max)
+            tvm.tirx.Cast(value.dtype, a_max)
             if isinstance(a_max, PrimExpr)
-            else tvm.tir.const(a_max, value.dtype)
+            else tvm.tirx.const(a_max, value.dtype)
         )
         return tvm.te.max(tvm.te.min(value, const_max), const_min)
 
@@ -658,11 +669,11 @@ def fixed_point_multiply(x, multiplier, shift):
 
     def _compute(*indices):
         value = x(*indices)
-        return tvm.tir.q_multiply_shift(
+        return tvm.tirx.q_multiply_shift(
             value,
-            tvm.tir.const(multiplier, "int32"),
-            tvm.tir.const(31, "int32"),
-            tvm.tir.const(shift, "int32"),
+            tvm.tirx.const(multiplier, "int32"),
+            tvm.tirx.const(31, "int32"),
+            tvm.tirx.const(shift, "int32"),
         )
 
     return te.compute(x.shape, _compute)
@@ -712,14 +723,14 @@ def fixed_point_multiply_per_axis(
         m = y(*param_indices)
         l_shift = lshift(*param_indices)
         r_shift = rshift(*param_indices)
-        return tvm.tir.q_multiply_shift_per_axis(
+        return tvm.tirx.q_multiply_shift_per_axis(
             value,
             m,
             l_shift,
             r_shift,
-            tvm.tir.const(31, "int32"),
-            tvm.tir.const(is_lshift_required, "bool"),
-            tvm.tir.const(is_rshift_required, "bool"),
+            tvm.tirx.const(31, "int32"),
+            tvm.tirx.const(is_lshift_required, "bool"),
+            tvm.tirx.const(is_rshift_required, "bool"),
         )
 
     return te.compute(x.shape, _compute)
@@ -747,7 +758,7 @@ def cast(x, dtype, span=None):
     if isinstance(x, te.tensor.Tensor):
         return te.compute(x.shape, lambda *i: x(*i).astype(dtype), tag=tag.ELEMWISE)
     # pylint: disable=import-outside-toplevel
-    from tvm.tir import _ffi_api
+    from tvm.tirx import _ffi_api
 
     return _ffi_api._cast(dtype, x, span)
 
@@ -838,18 +849,18 @@ def ceil_log2(x):
     y : tvm.te.Tensor
         The result.
     """
-    if not isinstance(x, tvm.tir.PrimExpr):
-        x = tvm.tir.const(x)
+    if not isinstance(x, tvm.tirx.PrimExpr):
+        x = tvm.tirx.const(x)
 
     if "float" in x.dtype:
-        return tvm.tir.ceil(tvm.tir.log2(x))
+        return tvm.tirx.ceil(tvm.tirx.log2(x))
 
     target = tvm.target.Target.current()
 
     if "vulkan" in target.kind.name:
-        clz = tvm.tir.clz(x)
+        clz = tvm.tirx.clz(x)
         bits = int(x.dtype[-2:])
-        res = tvm.tir.if_then_else(x & (x - 1) == 0, bits - clz - 1, bits - clz)
+        res = tvm.tirx.if_then_else(x & (x - 1) == 0, bits - clz - 1, bits - clz)
         if res.dtype != x.dtype:
             return cast(res, x.dtype)
         return res
@@ -859,6 +870,6 @@ def ceil_log2(x):
         "rocm",
         "webgpu",
     ]:
-        return cast(tvm.tir.ceil(tvm.tir.log2(cast(x, "float32"))), x.dtype)
+        return cast(tvm.tirx.ceil(tvm.tirx.log2(cast(x, "float32"))), x.dtype)
 
-    return cast(tvm.tir.ceil(tvm.tir.log2(cast(x, "float64"))), x.dtype)
+    return cast(tvm.tirx.ceil(tvm.tirx.log2(cast(x, "float64"))), x.dtype)

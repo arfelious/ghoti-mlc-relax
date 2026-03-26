@@ -19,10 +19,10 @@ import numpy
 
 import tvm
 import tvm.testing
-from tvm.script import tir as T
+from tvm.script import tirx as T
 
 # This numpy array is used to test the comparison between the global objects and the
-# `tvm.script.tir` submodule.
+# `tvm.script.tirx` submodule.
 np_array = numpy.array([0, 1, 2, 3])
 
 
@@ -49,11 +49,11 @@ def test_multi_element_array_in_outmost_namespace():
 def test_different_dtype_assignment_to_var():
     @T.prim_func
     def test_case():
-        a = T.alloc_buffer((10, 10), dtype="int8")
+        a = T.sblock_alloc_buffer((10, 10), dtype="int8")
 
     @T.prim_func
     def func_ref():
-        a = T.alloc_buffer([10, 10], dtype="int8")
+        a = T.sblock_alloc_buffer([10, 10], dtype="int8")
         T.evaluate(0)
 
     tvm.ir.assert_structural_equal(

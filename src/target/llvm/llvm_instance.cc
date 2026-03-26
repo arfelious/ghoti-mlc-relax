@@ -210,9 +210,7 @@ LLVMTargetInfo::LLVMTargetInfo(LLVMInstance& instance,
   // llvm module target
   if (Downcast<ffi::String>(target.Get("kind").value()) == "llvm") {
     // legalize -mcpu with the target -mtriple
-    auto arches = GetAllLLVMTargetArches();
-    bool has_arch =
-        std::any_of(arches.begin(), arches.end(), [&](const auto& var) { return var == cpu_; });
+    bool has_arch = IsValidCPU(cpu_);
     if (!has_arch) {
       // Flag an error, but don't abort. This mimicks the behaviour of 'llc' to
       // give the code a chance to run with a less-specific target.
@@ -440,6 +438,37 @@ llvm::TargetMachine* LLVMTargetInfo::GetOrCreateTargetMachine(bool allow_missing
   }
   TVM_FFI_ICHECK(target_machine_ != nullptr);
   return target_machine_.get();
+}
+
+bool LLVMTargetInfo::IsValidCPU(const std::string& cpu) const {
+  auto llvm_instance = CreateLLVMTargetInstance(triple_, true);
+  if (!llvm_instance) return false;
+  // Use isCPUStringValid which correctly handles CPU aliases
+  // (e.g. apple-m1 in LLVM 22+) that don't appear in getAllProcessorDescriptions().
+#if TVM_LLVM_VERSION >= 220
+  llvm::Triple triple_obj(triple_);
+  std::unique_ptr<llvm::MCSubtargetInfo> mc_info(
+      llvm_instance->createMCSubtargetInfo(triple_obj, "", ""));
+#else
+  std::unique_ptr<llvm::MCSubtargetInfo> mc_info(
+      llvm_instance->createMCSubtargetInfo(triple_, "", ""));
+#endif
+  if (mc_info && mc_info->isCPUStringValid(cpu)) {
+    return true;
+  }
+  // Fallback: on older LLVM versions (e.g. 19), isCPUStringValid may not
+  // recognize valid CPUs like apple-m1 that do appear in the processor
+  // enumeration. Check getAllProcessorDescriptions as a fallback.
+  if (mc_info) {
+#if TVM_LLVM_VERSION >= 170
+    for (const auto& desc : mc_info->getAllProcessorDescriptions()) {
+      if (cpu == desc.Key) {
+        return true;
+      }
+    }
+#endif
+  }
+  return false;
 }
 
 std::string LLVMTargetInfo::GetTargetFeatureString() const {  //

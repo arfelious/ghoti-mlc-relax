@@ -17,15 +17,15 @@
 # ruff: noqa: F401
 import tvm
 from tvm import s_tir
-from tvm.script import tir as T
+from tvm.script import tirx as T
 
 
 @T.prim_func
 def buffer_load_store_func(a: T.handle, b: T.handle) -> None:
     A = T.match_buffer(a, (128, 128), "float32")
     B = T.match_buffer(b, (128, 128), "float32")
-    C = T.alloc_buffer((128, 128), "float32")
-    D = T.alloc_buffer((128, 128), "float32")
+    C = T.sblock_alloc_buffer((128, 128), "float32")
+    D = T.sblock_alloc_buffer((128, 128), "float32")
     for ii, jj in T.grid(128, 128):
         with T.sblock():
             i, j = T.axis.remap("SS", [ii, jj])
